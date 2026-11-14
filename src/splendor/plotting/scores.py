@@ -55,7 +55,11 @@ def plot_link_maps(
         norm = Normalize(values.min(), values.max())
         cmap = sequential_cmap(reverse=low) # Dark = best
         plot_link_values(ax, edges, values, title, cmap, norm, low)
-        fig.colorbar(ScalarMappable(norm=norm, cmap=cmap), ax=ax, label=label, shrink=.7)
+        fig.colorbar(
+            ScalarMappable(norm=norm, cmap=cmap), 
+            ax=ax, label=label,
+            location="bottom", shrink=.6, aspect=30, pad=.02
+        )
     return fig
 
 
