@@ -1,4 +1,4 @@
-"""Normalization of score components to [0, 1]."""
+"""Normalization of score components to [0, 1] and z-scores."""
 import numpy as np
 from scipy.stats import rankdata
 from typing import Sequence
@@ -38,6 +38,14 @@ def _by_rank(values: np.ndarray) -> np.ndarray:
     return (rankdata(values, method="min") - 1) / (values.size - 1)
 
 
+def _by_zscore(values: np.ndarray) -> np.ndarray:
+    """Standard scores: (x - mean) / sd. Not bounded to [0, 1], so only for the weighted mean."""
+    sd = values.std()
+    if sd == 0:
+        raise ValueError("z-score normalization needs values with variance")
+    return (values - values.mean()) / sd
+
+
 def normalize_all(
     values: np.ndarray,
     methods: Sequence[str],
@@ -50,6 +58,7 @@ def normalize_all(
         "bounds": lambda: _by_bounds(values, lo, hi),
         "percentile": lambda: _by_percentile(values, lo, p),
         "rank": lambda: _by_rank(values),
+        "zscore": lambda: _by_zscore(values)
     }
     unknown = set(methods) - normalizers.keys()
     if unknown:

@@ -23,8 +23,9 @@ AGGREGATIONS = {
 
 def aggregate(matrix: np.ndarray, method: str, weights: Sequence[float], floor: float = 0.0) -> np.ndarray:
     """
-    Aggregate normalized components (links x components, values in [0, 1]) into a single score.
-    Weights are one per component, non-negative, and sum to 1.    
+    Aggregate normalized components into a single score, with one row per link and one column per component.
+    Values must be in [0, 1] for the geometric mean or a floor. The mean without a floor also accepts
+    unbounded values, e.g. z-scores. Weights are one per component, non-negative, and sum to 1.
     """
     if method not in AGGREGATIONS:
         raise ValueError(f"Aggregation '{method}' is not supported. Supported aggregation methods are {list(AGGREGATIONS)}")
@@ -34,8 +35,15 @@ def aggregate(matrix: np.ndarray, method: str, weights: Sequence[float], floor: 
         raise ValueError(f"matrix must be 2D (links x components), got shape {matrix.shape}")
     if np.isnan(matrix).any():
         raise ValueError("matrix contains NaN")
-    if (matrix < -TOL).any() or (matrix > 1 + TOL).any():
-        raise ValueError(f"matrix must be in [0, 1]: range [{matrix.min():.4g}, {matrix.max():.4g}]")
+
+    bounded = method == "geometric" or floor > 0
+    if bounded and ((matrix < -TOL).any() or (matrix > 1 + TOL).any()):
+        raise ValueError(
+            "matrix must be in [0, 1] for the geometric mean or a floor, "
+            f"got range [{matrix.min():.4g}, {matrix.max():.4g}]"
+        )
+    if bounded:
+        matrix = floor + (1 - floor) * np.clip(matrix, 0, 1)
 
     weights = np.asarray(weights, dtype=float)
     if weights.shape != (matrix.shape[1],):
@@ -48,6 +56,5 @@ def aggregate(matrix: np.ndarray, method: str, weights: Sequence[float], floor: 
     if not 0 <= floor < 1:
         raise ValueError(f"floor must be in [0, 1), got {floor}")
 
-    matrix = floor + (1 - floor) * np.clip(matrix, 0, 1)
     aggregate_func = AGGREGATIONS[method]
     return aggregate_func(matrix, weights)

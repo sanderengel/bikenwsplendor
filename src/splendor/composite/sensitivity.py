@@ -38,6 +38,13 @@ def _score_frame(edge_ids: np.ndarray, combination: dict, score: np.ndarray) -> 
     })
 
 
+def _rescale_to_unit(score: np.ndarray) -> np.ndarray:
+    """Min-max rescaling over the links to [0, 1], which keeps the ranks. Constant scores become 0."""
+    score = np.round(score, 12) # Float near-ties stay as ties
+    span = score.max() - score.min()
+    return np.zeros_like(score) if span == 0 else (score - score.min()) / span
+
+
 def get_score_grid(
     components: pd.DataFrame,
     measures: Sequence[str],
@@ -52,9 +59,14 @@ def get_score_grid(
 ) -> pd.DataFrame:
     """
     Score every link under every combination of land use measure, normalization, aggregation and weights.
+
     'components' holds edge_id, one 'diversity_<measure>' column per measure, the POI and the attractiveness column.
     'bounds' maps each component column to its (lo, hi). Each combination normalizes all components with the same method.
     'weights' holds (land use, POI, attractiveness) weight tuples.
+    
+    Scores are in [0, 1]. With z-score normalization, 
+    the aggregated scores are rescaled per combination (min-max over the links).
+
     Returns long format: edge_id, the combination columns, score, rank (1 = best).
     """
     edge_ids = components["edge_id"].to_numpy()
@@ -66,7 +78,11 @@ def get_score_grid(
         component_columns = (f"diversity_{measure}", poi_column, attractiveness_column)
         matrix = np.column_stack([normalized[c][normalization] for c in component_columns])
         floor = geometric_floor if aggregation == "geometric" else 0.0
+
         score = aggregate(matrix, aggregation, component_weights, floor)
+        if normalization == "zscore":
+            score = _rescale_to_unit(score)
+        
         combination = dict(zip(COMBINATION_COLUMNS, (measure, normalization, aggregation, *component_weights)))
         frames.append(_score_frame(edge_ids, combination, score))
 
