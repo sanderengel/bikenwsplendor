@@ -70,7 +70,7 @@ def plot_landuse_map(
 
     # Raster window around the corridor
     map_extent = get_map_extent(corridor, margin)
-    window = get_bounds_window(map_extent, transform, raster.shape)
+    window = get_bounds_window(map_extent, transform, raster.shape, clip=True)
     left, bottom, right, top = windows.bounds(window, transform)
     ax.imshow(
         raster[window.toslices()], cmap=cmap, norm=norm, 
