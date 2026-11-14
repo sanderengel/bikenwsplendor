@@ -67,7 +67,7 @@ print(f"Distinct loops: {loops.n_loops} identical sets")
 order = [bwl_keys[k] for k in own_keys]
 bwl_len, bwl_slope100, bwl_poi = (np.array(x) for x in zip(*order))
 
-np.testing.assert_allclose(loops.lengths_m, bwl_len, rtol=1e6) # bikenwloops is float32
+np.testing.assert_allclose(loops.lengths_m, bwl_len, rtol=1e-6) # bikenwloops is float32
 
 # Attributes
 own_slope = loop_max(loops, edges.max_slope.to_numpy())
