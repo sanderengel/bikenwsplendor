@@ -31,10 +31,11 @@ from splendor.diversity import get_bounds
 from splendor.composite.sensitivity import get_score_grid, summarize_ranks, get_rank_correlations
 
 STUDY_AREA = get_study_area()
+PATH_ARGS = (STUDY_AREA, CORRIDOR_RADIUS, ROAD_STRIP_RADIUS)
 
 # Components are land use diversity per measure plus POI diversity from the network
 _, edges = load_network(network_path(STUDY_AREA))
-diversity = pd.read_csv(link_diversity_path(STUDY_AREA, CORRIDOR_RADIUS, ROAD_STRIP_RADIUS))
+diversity = pd.read_csv(link_diversity_path(*PATH_ARGS))
 
 components = diversity.merge(
     edges[["edge_id", "poi_diversity"]], on="edge_id", how="inner", validate="one_to_one"
@@ -70,8 +71,7 @@ splendor = splendor[["edge_id", "score", "rank"]]
 assert splendor["edge_id"].is_unique
 assert set(splendor["edge_id"]) == set(edges["edge_id"]), "main specification must match exactly one combination in the grid"
 
-path_args = (STUDY_AREA, CORRIDOR_RADIUS, ROAD_STRIP_RADIUS)
-grid.to_csv(link_score_grid_path(*path_args), index=False)
-summary.to_csv(link_rank_summary_path(*path_args), index=False)
-correlations.to_csv(link_rank_correlations_path(*path_args))
-splendor.to_csv(link_splendor_path(*path_args), index=False)
+grid.to_csv(link_score_grid_path(*PATH_ARGS), index=False)
+summary.to_csv(link_rank_summary_path(*PATH_ARGS), index=False)
+correlations.to_csv(link_rank_correlations_path(*PATH_ARGS))
+splendor.to_csv(link_splendor_path(*PATH_ARGS), index=False)
