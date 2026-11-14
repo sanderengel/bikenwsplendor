@@ -11,7 +11,7 @@ def clean_axes(ax: Axes) -> None:
     ax.spines[["top", "right"]].set_visible(False)
 
 
-def sequential_cmap(name: str = "Blues", start: float = .25, reverse: bool = False) -> Colormap:
-    """Single-hue sequential colormap, starting above white so low values stay visible."""
-    colors = plt.get_cmap(name)(np.linspace(start, 1, 256))
+def sequential_cmap(name: str = "inferno", start: float = 0.0, end: float = .85, reverse: bool = False) -> Colormap:
+    """Single-hue sequential colormap."""
+    colors = plt.get_cmap(name)(np.linspace(start, end, 256))
     return ListedColormap(colors[::-1] if reverse else colors)
