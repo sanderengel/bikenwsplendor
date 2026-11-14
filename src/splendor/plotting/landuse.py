@@ -157,7 +157,7 @@ def plot_link_landuse_grid(
         ax_map, ax_bar = subfig.subplots(1, 2, width_ratios=[map_width_ratio, 1])
 
         plot_landuse_map(ax_map, raster, transform, line, corridors.iloc[edge_id], margin)
-        title = _link_title(
+        panel_title = _link_title(
             edge_id,
             line.length / 1000, # m to km
             int(shares.at[edge_id, "n_pixels"]),
@@ -165,7 +165,7 @@ def plot_link_landuse_grid(
             score=float(scores[edge_id]) if scores is not None else None,
             detail=details[edge_id] if details is not None else None
         )
-        ax_map.set_title(title, fontsize=10, loc="left")
+        ax_map.set_title(panel_title, fontsize=10, loc="left")
 
         plot_shares(ax_bar, shares.loc[edge_id], min_share, map_width_ratio)
 
