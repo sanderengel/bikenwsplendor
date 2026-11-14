@@ -22,7 +22,13 @@ DIVERSITY_MEASURES = (
 ) 
 RICHNESS_MIN_SHARE = .1
 
-NORMALIZATION_METHODS = ("bounds", "percentile", "rank") # See src/splendor/composite/normalize.py
+NORMALIZATION_METHODS = (
+    # See src/splendor/composite/normalize.py
+    "bounds",
+    "percentile",
+    "rank",
+    "zscore"
+)
 NORMALIZATION_PERCENTILE = 99
 
 POI_BOUNDS = (0, 3) # Theoretical range of POI categories
@@ -48,11 +54,16 @@ COMPONENT_WEIGHTS = ( # Weights of (land use diversity, POI, attractiveness) in 
     (0.4, 0.3, 0.3),
     (1/3, 1/3, 1/3),
 )
-REFERENCE_WEIGHTS = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)) # Single-component rankings, kept out of the rank summary
+REFERENCE_WEIGHTS = (
+    # Single-component rankings, kept out of the rank summary
+    (1.0, 0.0, 0.0),
+    (0.0, 1.0, 0.0),
+    (0.0, 0.0, 1.0)
+)
 
 MAIN_SPECIFICATION = {
     "measure": "shannon",
-    "normalization": "percentile",
+    "normalization": "zscore",
     "aggregation": "mean",
     "land_use_weight": 0.5,
     "poi_weight": 0.25,
