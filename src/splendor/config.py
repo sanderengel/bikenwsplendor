@@ -29,12 +29,11 @@ POI_BOUNDS = (0, 3) # Theoretical range of POI categories
 GEOMETRIC_FLOOR = 0.25 # Components are lifted to floor + (1 - floor) * x in the geometric mean, so a 0 doesn't zero the score
 
 AGGREGATION_METHODS = ("mean", "geometric") # See src/splendor/composite/aggregate.py
-LAND_USE_WEIGHTS = (0.25, 0.5, 0.75) # Weight of land use in the score, POI gets 1 - w
-REFERENCE_WEIGHTS = (0.0, 1.0) # Single-component rankings (POI only, land use only), kept out of the rank summary
 
-MAIN_SPECIFICATION = {
-    "measure": "shannon",
-    "normalization": "percentile",
-    "aggregation": "mean",
-    "weight": 0.75
+ATTRACTIVENESS = { # Land use type id to attractiveness, in 5 tiers (ids in src/splendor/landuse/types.py)
+    12: 1.0, 11: 1.0, 10: 1.0,               # Sea, coast, lagoons/tidal flats
+    9: .75, 8: .75, 7: .75, 5: .75, 6: .75,  # Lakes, rivers, mires, heathland, sparsely vegetated
+    4: .5,                                   # Forest
+    2: .25, 3: .25,                          # Cropland, grassland
+    1: 0.0, 14: 0.0,                         # Settlement, road/rail
 }
