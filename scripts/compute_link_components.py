@@ -2,7 +2,7 @@ import pandas as pd
 
 from splendor.io import load_network
 from splendor.cli import get_study_area
-from splendor.paths import network_path, link_landuse_path, link_diversity_path
+from splendor.paths import network_path, link_landuse_path, link_components_path
 from splendor.landuse.shares import get_shares_array
 from splendor.config import CORRIDOR_RADIUS, ROAD_STRIP_RADIUS, DIVERSITY_MEASURES, ATTRACTIVENESS
 from splendor.diversity import get_diversity
@@ -18,13 +18,13 @@ assert edges["edge_id"].equals(corridor_shares["edge_id"])
 
 shares_array = get_shares_array(corridor_shares)
 
-link_diversity = pd.DataFrame({
+components = pd.DataFrame({
     "edge_id": corridor_shares["edge_id"],
     **{f"diversity_{m}": get_diversity(shares_array, m) for m in DIVERSITY_MEASURES},
     "attractiveness": get_attractiveness(corridor_shares, ATTRACTIVENESS)
 })
 
-link_diversity.to_csv(
-    link_diversity_path(STUDY_AREA, CORRIDOR_RADIUS, ROAD_STRIP_RADIUS),
+components.to_csv(
+    link_components_path(STUDY_AREA, CORRIDOR_RADIUS, ROAD_STRIP_RADIUS),
     index=False,
 )

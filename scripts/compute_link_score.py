@@ -5,7 +5,7 @@ from splendor.io import load_network
 from splendor.cli import get_study_area
 from splendor.paths import (
     network_path,
-    link_diversity_path,
+    link_components_path,
     link_score_grid_path,
     link_rank_summary_path,
     link_rank_correlations_path,
@@ -34,14 +34,14 @@ from splendor.composite.sensitivity import get_score_grid, summarize_ranks, get_
 STUDY_AREA = get_study_area()
 PATH_ARGS = (STUDY_AREA, CORRIDOR_RADIUS, ROAD_STRIP_RADIUS)
 
-# Components are land use diversity per measure plus POI diversity from the network
+# Components are land use diversity per measure and attractiveness, plus POI diversity from the network
 _, edges = load_network(network_path(STUDY_AREA))
-diversity = pd.read_csv(link_diversity_path(*PATH_ARGS))
+components = pd.read_csv(link_components_path(*PATH_ARGS))
 
-components = diversity.merge(
+score_components = components.merge(
     edges[["edge_id", "poi_diversity"]], on="edge_id", how="inner", validate="one_to_one"
 )
-assert len(components) == len(edges) == len(diversity), "edge ids of network and diversity file don't match"
+assert len(score_components) == len(edges) == len(components), "edge ids of network and components file don't match"
 
 # Each component's theoretical bounds
 n_types = N_TYPES - len(EXCLUDED_TYPES) # Types the measures see
@@ -51,7 +51,7 @@ bounds["attractiveness"] = (min(ATTRACTIVENESS.values()), max(ATTRACTIVENESS.val
 
 # Every combination including the single-component reference weights
 grid = get_score_grid(
-    components,
+    score_components,
     DIVERSITY_MEASURES,
     NORMALIZATION_METHODS,
     AGGREGATION_METHODS,
