@@ -13,14 +13,16 @@ from splendor.composite.sensitivity import (
 MEASURES = ("shannon", "richness")
 NORMALIZATIONS = ("bounds", "percentile", "rank")
 AGGREGATIONS = ("mean", "geometric")
-WEIGHTS = (0.5, 1.0)
 P = 99
+
+WEIGHTS = ((0.5, 0.5, 0.0), (1.0, 0.0, 0.0), (0.5, 0.25, 0.25), (0.0, 0.0, 1.0))
 N_COMBINATIONS = len(MEASURES) * len(NORMALIZATIONS) * len(AGGREGATIONS) * len(WEIGHTS)
 
 BOUNDS = {
     "diversity_shannon": (0, math.log(13)),
     "diversity_richness": (1, 10),
     "poi_diversity": (0, 3),
+    "attractiveness": (0, 1)
 }
 
 
@@ -32,6 +34,7 @@ def components() -> pd.DataFrame:
         "diversity_shannon": [0.2, 0.8, 1.2, 0.5],
         "diversity_richness": [1, 2, 3, 2],
         "poi_diversity": [0, 1, 3, 2],
+        "attractiveness": [0.0, 0.25, 1.0, 0.5]
     })
 
 
@@ -52,10 +55,17 @@ def test_grid_keeps_edge_ids(grid, components):
         assert group["edge_id"].to_list() == components["edge_id"].to_list()
 
 
+def _combination(grid: pd.DataFrame, **choices) -> pd.DataFrame:
+    """Rows of the grid with the given value in each combination column."""
+    mask = (grid[list(choices)] == pd.Series(choices)).all(axis=1)
+    return grid[mask]
+
+
 def test_grid_known_score(grid, components):
     """Shannon, bounds, mean, weight 1: the score is Shannon / ln 13, and the highest Shannon gets rank 1."""
-    combination = grid.query(
-        "measure == 'shannon' and normalization == 'bounds' and aggregation == 'mean' and weight == 1.0"
+    combination = _combination(
+        grid, measure="shannon", normalization="bounds", aggregation="mean",
+        land_use_weight=1.0, poi_weight=0.0, attractiveness_weight=0.0,
     )
     expected = components["diversity_shannon"].to_numpy() / math.log(13)
     np.testing.assert_allclose(combination["score"], expected)
@@ -80,7 +90,20 @@ def test_grid_near_tied_scores_share_rank():
         "edge_id": [1, 2],
         "diversity_shannon": [0.1, 0.3],
         "poi_diversity": [0.2, 0.0],
+        "attractiveness": [0.0, 0.0]
     })
-    bounds = {"diversity_shannon": (0, 1), "poi_diversity": (0, 1)}
-    grid = get_score_grid(components, ["shannon"], ["bounds"], ["mean"], [0.5], bounds, p=99, geometric_floor=0.25)
+    bounds = {"diversity_shannon": (0, 1), "poi_diversity": (0, 1), "attractiveness": (0, 1)}
+    grid = get_score_grid(
+        components, ["shannon"], ["bounds"], ["mean"], [(0.5, 0.5, 0.0)], 
+        bounds, p=99, geometric_floor=0.25
+    )
     assert grid["rank"].to_list() == [1, 1]
+
+
+def test_grid_attractiveness_only(grid, components):
+    """Bounds, mean, a = 1: the score is the attractiveness itself."""
+    combination = _combination(
+        grid, measure="shannon", normalization="bounds", aggregation="mean",
+        land_use_weight=0.0, poi_weight=0.0, attractiveness_weight=1.0,
+    )
+    np.testing.assert_allclose(combination["score"], components["attractiveness"])
