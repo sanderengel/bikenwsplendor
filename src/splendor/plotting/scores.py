@@ -105,7 +105,7 @@ def plot_rank_correlations(
         ax.axhline(start - .5, color="white", linewidth=1)
         ax.axvline(start - .5, color="white", linewidth=1)
 
-    inner = " · ".join(level_order[n_label_levels:])
+    inner = ", ".join(l for l in level_order[n_label_levels:] if corr.index.get_level_values(l).nunique() > 1)
     ax.set_xlabel(f"Within blocks, sorted by: {inner}", fontsize=8)
     ax.set_title(title)
     fig.colorbar(image, ax=ax, label="Spearman correlation", shrink=.7)
