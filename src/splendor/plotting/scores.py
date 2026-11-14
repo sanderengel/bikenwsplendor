@@ -65,7 +65,7 @@ def plot_link_maps(
 
 def plot_rank_correlations(
     correlations: pd.DataFrame,
-    level_order: Sequence[str] = ("measure", "normalization", "aggregation", "weight"),
+    level_order: Sequence[str] = ("measure", "normalization", "aggregation"),
     title: str = "Rank correlations between combinations",
     size: float = 9,
 ) -> Figure:
