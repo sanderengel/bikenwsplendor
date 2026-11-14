@@ -80,7 +80,7 @@ def _format_level_value(value) -> str:
 
 def plot_rank_correlations(
     correlations: pd.DataFrame,
-    level_order: Sequence[str] = ("measure", "normalization", "aggregation"),
+    level_order: Sequence[str] | None = None,
     n_label_levels: int = 1,
     title: str = "Rank correlations between combinations",
     size: float = 9,
@@ -89,6 +89,7 @@ def plot_rank_correlations(
     Heatmap of the Spearman correlations between combinations, sorted by 'level_order',
     so blocks show which choice the correlation depends on most (outermost level = largest blocks).
     """
+    level_order = list(level_order or correlations.index.names)
     corr = correlations.reorder_levels(level_order, axis=0).reorder_levels(level_order, axis=1)
     corr = corr.sort_index(axis=0).sort_index(axis=1)
 
