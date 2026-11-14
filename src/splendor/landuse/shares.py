@@ -12,6 +12,10 @@ def get_share_column_name(k: int) -> str:
     return SHARE_PREFIX + str(k)
 
 
+def get_share_type_id(column_name: str) -> int:
+    return int(column_name.removeprefix(SHARE_PREFIX))
+
+
 def get_corridor_shares(
     corridors: gpd.GeoSeries,
     raster: np.ndarray,
