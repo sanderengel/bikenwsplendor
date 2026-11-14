@@ -28,7 +28,11 @@ NORMALIZATION_PERCENTILE = 99
 POI_BOUNDS = (0, 3) # Theoretical range of POI categories
 GEOMETRIC_FLOOR = 0.25 # Components are lifted to floor + (1 - floor) * x in the geometric mean, so a 0 doesn't zero the score
 
-AGGREGATION_METHODS = ("mean", "geometric") # See src/splendor/composite/aggregate.py
+AGGREGATION_METHODS = (
+    # See src/splendor/composite/aggregate.py
+    "mean", 
+    # "geometric" # check, dropped as redundant (see src/notebooks/exp/link_components.ipynb)
+)
 
 ATTRACTIVENESS = { # Land use type id to attractiveness, in 5 tiers (ids in src/splendor/landuse/types.py)
     12: 1.0, 11: 1.0, 10: 1.0,               # Sea, coast, lagoons/tidal flats
