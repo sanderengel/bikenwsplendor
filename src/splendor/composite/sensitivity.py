@@ -28,11 +28,6 @@ def _normalize_components(
     }
 
 
-def _component_weights(w: float, a: float) -> list[float]:
-    """Weights of (land use, POI, attractiveness): attractiveness gets a, land use and POI split the rest as w : 1 - w."""
-    return [w * (1 - a), (1 - w) * (1 - a), a]
-
-
 def _score_frame(edge_ids: np.ndarray, combination: dict, score: np.ndarray) -> pd.DataFrame:
     """Long-format scores of one combination, with ranks (1 = best, near-ties share a rank)."""
     return pd.DataFrame({
