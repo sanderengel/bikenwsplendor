@@ -65,3 +65,14 @@ def test_aggregate_floor_keeps_mean_ranking():
     without_floor = aggregate(MATRIX, "mean", EQUAL)
     with_floor = aggregate(MATRIX, "mean", EQUAL, floor=0.25)
     np.testing.assert_array_equal(np.argsort(with_floor), np.argsort(without_floor))
+
+
+def test_aggregate_mean_accepts_unbounded():
+    """The mean without a floor works on z-scores."""
+    matrix = np.array([[-1.0, 2.0], [0.5, -0.5]])
+    np.testing.assert_allclose(aggregate(matrix, "mean", [0.5, 0.5]), [0.5, 0.0])
+
+
+def test_aggregate_geometric_unbounded_error():
+    with pytest.raises(ValueError, match=r"\[0, 1\]"):
+        aggregate(np.array([[-1.0, 2.0]]), "geometric", [0.5, 0.5])

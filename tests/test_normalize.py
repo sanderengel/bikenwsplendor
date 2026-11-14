@@ -64,3 +64,15 @@ def test_normalize_unknown_method_error():
     p = 99
     with pytest.raises(ValueError, match="not supported"):
         normalize_all(np.array([0., 1.]), ["unknown"], lo, hi, p)
+
+
+def test_normalize_zscore():
+    """Z-scores have mean 0 and standard deviation 1."""
+    result = normalize_all(np.array([1., 2., 3., 6.]), ["zscore"], 0, 10, 99)["zscore"]
+    assert result.mean() == pytest.approx(0)
+    assert result.std() == pytest.approx(1)
+
+
+def test_normalize_zscore_constant_error():
+    with pytest.raises(ValueError, match="variance"):
+        normalize_all(np.array([2., 2.]), ["zscore"], 0, 10, 99)

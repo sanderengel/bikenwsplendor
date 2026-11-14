@@ -107,3 +107,10 @@ def test_grid_attractiveness_only(grid, components):
         land_use_weight=0.0, poi_weight=0.0, attractiveness_weight=1.0,
     )
     np.testing.assert_allclose(combination["score"], components["attractiveness"])
+
+
+def test_grid_zscore_scores_span_unit_interval(components):
+    """Z-score combinations are rescaled so their scores span exactly [0, 1]."""
+    grid = get_score_grid(components, ["shannon"], ["zscore"], ["mean"], [(0.5, 0.25, 0.25)], BOUNDS, P, 0.25)
+    assert grid["score"].min() == 0
+    assert grid["score"].max() == 1
