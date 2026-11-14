@@ -7,6 +7,7 @@ from rasterio.crs import CRS
 from pathlib import Path
 from shapely.geometry import Point
 from affine import Affine
+from typing import Sequence
 
 from splendor.paths import ensure_parent
 from splendor.config import EPSG
@@ -59,12 +60,17 @@ def load_raster(path: str | Path) -> tuple[np.ndarray, Affine, CRS]:
     return raster, transform, raster_crs
 
 
-def load_rank_correlations(path: str | Path) -> pd.DataFrame:
-    """Rank correlation matrix with (measure, normalization, aggregation, weight) labels on both axes."""
-    corr = pd.read_csv(path, header=[0, 1, 2, 3], index_col=[0, 1, 2, 3])
+def load_rank_correlations(path: str | Path, names: Sequence[str]) -> pd.DataFrame:
+    """
+    Rank correlation matrix with the combination labels on both axes.
+    'names' are the label levels in file order. Levels whose name ends in 'weight' are cast to float.
+    """
+    n = len(names)
+    corr = pd.read_csv(path, header=list(range(n)), index_col=list(range(n)))
+    is_weight = [name.endswith("weight") for name in names]
     labels = pd.MultiIndex.from_tuples(
-        [(m, n, a, float(w)) for m, n, a, w in corr.index],
-        names=["measure", "normalization", "aggregation", "weight"]
+        [tuple(float(v) if w else v for v, w in zip(key, is_weight)) for key in corr.index],
+        names=names
     )
     # Same combinations in the same order on both axes
     corr.index = labels
