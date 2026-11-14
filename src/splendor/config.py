@@ -37,3 +37,20 @@ ATTRACTIVENESS = { # Land use type id to attractiveness, in 5 tiers (ids in src/
     2: .25, 3: .25,                          # Cropland, grassland
     1: 0.0, 14: 0.0,                         # Settlement, road/rail
 }
+
+COMPONENT_WEIGHTS = ( # Weights of (land use diversity, POI, attractiveness) in the score
+    (0.5, 0.25, 0.25),
+    (0.6, 0.2, 0.2),
+    (0.4, 0.3, 0.3),
+    (1/3, 1/3, 1/3),
+)
+REFERENCE_WEIGHTS = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)) # Single-component rankings, kept out of the rank summary
+
+MAIN_SPECIFICATION = {
+    "measure": "shannon",
+    "normalization": "percentile",
+    "aggregation": "mean",
+    "land_use_weight": 0.5,
+    "poi_weight": 0.25,
+    "attractiveness_weight": 0.25,
+}

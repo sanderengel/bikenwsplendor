@@ -22,8 +22,9 @@ from splendor.config import (
     POI_BOUNDS,
     GEOMETRIC_FLOOR,
     AGGREGATION_METHODS,
-    LAND_USE_WEIGHTS,
+    COMPONENT_WEIGHTS,
     REFERENCE_WEIGHTS,
+    ATTRACTIVENESS,
     MAIN_SPECIFICATION
 )
 from splendor.landuse.types import N_TYPES
@@ -46,6 +47,7 @@ assert len(components) == len(edges) == len(diversity), "edge ids of network and
 n_types = N_TYPES - len(EXCLUDED_TYPES) # Types the measures see
 bounds = {f"diversity_{m}": get_bounds(m, n_types, RICHNESS_MIN_SHARE) for m in DIVERSITY_MEASURES}
 bounds["poi_diversity"] = POI_BOUNDS
+bounds["attractiveness"] = (min(ATTRACTIVENESS.values()), max(ATTRACTIVENESS.values()))
 
 # Every combination including the single-component reference weights
 grid = get_score_grid(
@@ -53,14 +55,16 @@ grid = get_score_grid(
     DIVERSITY_MEASURES,
     NORMALIZATION_METHODS,
     AGGREGATION_METHODS,
-    land_use_weights=(*LAND_USE_WEIGHTS, *REFERENCE_WEIGHTS),
+    weights=(*COMPONENT_WEIGHTS, *REFERENCE_WEIGHTS),
     bounds=bounds,
     p=NORMALIZATION_PERCENTILE,
     geometric_floor=GEOMETRIC_FLOOR,
 )
 
 # Rank summary over the combined scores only, but correlations over all combinations
-summary = summarize_ranks(grid[grid["weight"].isin(LAND_USE_WEIGHTS)])
+weight_columns = ["land_use_weight", "poi_weight", "attractiveness_weight"]
+is_combined = pd.MultiIndex.from_frame(grid[weight_columns]).isin(COMPONENT_WEIGHTS)
+summary = summarize_ranks(grid[is_combined])
 correlations = get_rank_correlations(grid)
 
 # Filter to main specification to get final splendor scores

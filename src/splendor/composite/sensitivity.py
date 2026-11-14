@@ -8,7 +8,39 @@ from typing import Sequence
 from splendor.composite.normalize import normalize_all
 from splendor.composite.aggregate import aggregate
 
-COMBINATION_COLUMNS = ["measure", "normalization", "aggregation", "weight"]
+COMBINATION_COLUMNS = [
+    "measure", "normalization", "aggregation", 
+    "land_use_weight", "poi_weight", "attractiveness_weight"
+]
+
+
+def _normalize_components(
+    components: pd.DataFrame,
+    columns: Sequence[str],
+    normalizations: Sequence[str],
+    bounds: dict[str, tuple[float, float]],
+    p: float,
+) -> dict[str, dict[str, np.ndarray]]:
+    """Normalize each component column with every method: {column: {method: values}}."""
+    return {
+        column: normalize_all(components[column].to_numpy(dtype=float), normalizations, *bounds[column], p)
+        for column in columns
+    }
+
+
+def _component_weights(w: float, a: float) -> list[float]:
+    """Weights of (land use, POI, attractiveness): attractiveness gets a, land use and POI split the rest as w : 1 - w."""
+    return [w * (1 - a), (1 - w) * (1 - a), a]
+
+
+def _score_frame(edge_ids: np.ndarray, combination: dict, score: np.ndarray) -> pd.DataFrame:
+    """Long-format scores of one combination, with ranks (1 = best, near-ties share a rank)."""
+    return pd.DataFrame({
+        "edge_id": edge_ids,
+        **combination,
+        "score": score,
+        "rank": rankdata(-np.round(score, 12), method="min"),
+    })
 
 
 def get_score_grid(
@@ -16,45 +48,32 @@ def get_score_grid(
     measures: Sequence[str],
     normalizations: Sequence[str],
     aggregations: Sequence[str],
-    land_use_weights: Sequence[float],
+    weights: Sequence[tuple[float, float, float]],
     bounds: dict[str, tuple[float, float]],
     p: float,
     geometric_floor: float,
     poi_column: str = "poi_diversity",
+    attractiveness_column: str = "attractiveness",
 ) -> pd.DataFrame:
     """
-    Score every link under every combination of land use measure, normalization, aggregation and weight.
-    'components' holds edge_id, one 'diversity_<measure>' column per measure and the POI column.
-    'bounds' maps each component column to its (lo, hi). Each combination normalizes all
-    components with the same method. Land use gets weight w, POI gets 1 - w.
-    Returns long format: edge_id, measure, normalization, aggregation, weight, score, rank (1 = best).
+    Score every link under every combination of land use measure, normalization, aggregation and weights.
+    'components' holds edge_id, one 'diversity_<measure>' column per measure, the POI and the attractiveness column.
+    'bounds' maps each component column to its (lo, hi). Each combination normalizes all components with the same method.
+    'weights' holds (land use, POI, attractiveness) weight tuples.
+    Returns long format: edge_id, the combination columns, score, rank (1 = best).
     """
     edge_ids = components["edge_id"].to_numpy()
-
-    poi = components[poi_column].to_numpy(dtype=float)
-    poi_normalized = normalize_all(poi, normalizations, *bounds[poi_column], p)
+    columns = [*(f"diversity_{m}" for m in measures), poi_column, attractiveness_column]
+    normalized = _normalize_components(components, columns, normalizations, bounds, p)
 
     frames = []
-    for measure in measures:
-        land_use_column = f"diversity_{measure}"
-        land_use = components[land_use_column].to_numpy(dtype=float)
-        land_use_normalized = normalize_all(land_use, normalizations, *bounds[land_use_column], p)
-
-        for normalization in normalizations:
-            matrix = np.column_stack([land_use_normalized[normalization], poi_normalized[normalization]])
-
-            for aggregation, w in product(aggregations, land_use_weights):
-                floor = geometric_floor if aggregation == "geometric" else 0.0
-                score = aggregate(matrix, aggregation, [w, 1 - w], floor)
-                frames.append(pd.DataFrame({
-                    "edge_id": edge_ids,
-                    "measure": measure,
-                    "normalization": normalization,
-                    "aggregation": aggregation,
-                    "weight": w,
-                    "score": score,
-                    "rank": rankdata(-np.round(score, 12), method="min"), # Highest score gets rank 1
-                }))
+    for measure, normalization, aggregation, component_weights in product(measures, normalizations, aggregations, weights):
+        component_columns = (f"diversity_{measure}", poi_column, attractiveness_column)
+        matrix = np.column_stack([normalized[c][normalization] for c in component_columns])
+        floor = geometric_floor if aggregation == "geometric" else 0.0
+        score = aggregate(matrix, aggregation, component_weights, floor)
+        combination = dict(zip(COMBINATION_COLUMNS, (measure, normalization, aggregation, *component_weights)))
+        frames.append(_score_frame(edge_ids, combination, score))
 
     return pd.concat(frames, ignore_index=True)
 
