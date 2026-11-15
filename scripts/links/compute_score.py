@@ -29,8 +29,14 @@ from splendor.config import (
     MAIN_SPECIFICATION
 )
 from splendor.landuse.types import N_TYPES
-from splendor.components.diversity import get_bounds
-from splendor.composite.sensitivity import get_score_grid, summarize_ranks, get_rank_correlations
+from splendor.components.combine import get_component_bounds
+from splendor.composite.sensitivity import (
+    get_main_scores,
+    get_score_grid,
+    select_weights,
+    summarize_ranks,
+    get_rank_correlations
+)
 
 STUDY_AREA = get_study_area()
 LEVEL = "links"
@@ -46,10 +52,9 @@ assert components.index.is_unique
 assert len(score_components) == len(edges) == len(components), "edge ids of network and components file don't match"
 
 # Each component's theoretical bounds
-n_types = N_TYPES - len(EXCLUDED_TYPES) # Types the measures see
-bounds = {f"diversity_{m}": get_bounds(m, n_types, RICHNESS_MIN_SHARE) for m in DIVERSITY_MEASURES}
-bounds["poi_diversity"] = POI_BOUNDS
-bounds["attractiveness"] = (min(ATTRACTIVENESS.values()), max(ATTRACTIVENESS.values()))
+bounds = get_component_bounds(
+    DIVERSITY_MEASURES, N_TYPES, EXCLUDED_TYPES, RICHNESS_MIN_SHARE, POI_BOUNDS, ATTRACTIVENESS
+)
 
 # Every combination including the single-component reference weights
 grid = get_score_grid(
@@ -63,19 +68,11 @@ grid = get_score_grid(
     geometric_floor=GEOMETRIC_FLOOR,
 )
 
-# Rank summary over the combined scores only, but correlations over all combinations
-weight_columns = ["land_use_weight", "poi_weight", "attractiveness_weight"]
-is_combined = pd.MultiIndex.from_frame(grid[weight_columns]).isin(COMPONENT_WEIGHTS)
-summary = summarize_ranks(grid[is_combined], ID_COLUMN)
-correlations = get_rank_correlations(grid, ID_COLUMN)
+splendor = get_main_scores(grid, MAIN_SPECIFICATION, ID_COLUMN)
 
-# Filter to main specification to get final splendor scores
-splendor = grid.copy()
-for column, choice in MAIN_SPECIFICATION.items():
-    splendor = splendor[splendor[column] == choice]
-splendor = splendor[[ID_COLUMN, "score", "rank"]]
-assert splendor[ID_COLUMN].is_unique
-assert set(splendor[ID_COLUMN]) == set(edges[ID_COLUMN]), "main specification must match exactly one combination in the grid"
+# Rank summary over the combined scores only, but correlations over all combinations
+summary = summarize_ranks(select_weights(grid, COMPONENT_WEIGHTS), ID_COLUMN)
+correlations = get_rank_correlations(grid, ID_COLUMN)
 
 grid.to_csv(ensure_parent(score_grid_path(*PATH_ARGS)), index=False)
 summary.to_csv(ensure_parent(rank_summary_path(*PATH_ARGS)), index=False)

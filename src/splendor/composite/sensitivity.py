@@ -3,15 +3,13 @@ import numpy as np
 import pandas as pd
 from scipy.stats import rankdata
 from itertools import product
-from typing import Sequence
+from typing import Sequence, Any
 
 from splendor.composite.normalize import normalize_all
 from splendor.composite.aggregate import aggregate
 
-COMBINATION_COLUMNS = [
-    "measure", "normalization", "aggregation", 
-    "land_use_weight", "poi_weight", "attractiveness_weight"
-]
+WEIGHT_COLUMNS = ["land_use_weight", "poi_weight", "attractiveness_weight"]
+COMBINATION_COLUMNS = ["measure", "normalization", "aggregation"] + WEIGHT_COLUMNS
 
 
 def _normalize_components(
@@ -111,3 +109,20 @@ def get_rank_correlations(grid: pd.DataFrame, id_column: str) -> pd.DataFrame:
     """Spearman correlation between the unit scores of every pair of combinations."""
     wide = grid.pivot(index=id_column, columns=COMBINATION_COLUMNS, values="score")
     return wide.corr(method="spearman")
+
+
+def select_weights(grid: pd.DataFrame, weights: Sequence[tuple[float, float, float]]) -> pd.DataFrame:
+    """Rows of the grid whose weight tuple is one of 'weights'."""
+    is_selected = pd.MultiIndex.from_frame(grid[WEIGHT_COLUMNS]).isin(weights)
+    return grid[is_selected]
+
+
+def get_main_scores(grid: pd.DataFrame, specification: dict[str, Any], id_column: str) -> pd.DataFrame:
+    """Scores and ranks of the main specification: one row per unit (id, score, rank)."""
+    main = grid
+    for column, choice in specification.items():
+        main = main[main[column] == choice]
+    main = main[[id_column, "score", "rank"]]
+    if not (main[id_column].is_unique and main[id_column].nunique() == grid[id_column].nunique()):
+        raise ValueError("main specification must match exactly one combination in the grid")
+    return main.reset_index(drop=True)
