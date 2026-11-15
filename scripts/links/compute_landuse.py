@@ -1,12 +1,13 @@
 from splendor.io import load_network, load_raster
 from splendor.cli import get_study_area
-from splendor.paths import network_path, basemap05_main_types_path, link_landuse_path
+from splendor.paths import ensure_parent, network_path, basemap05_main_types_path, landuse_path
 from splendor.config import CORRIDOR_RADIUS, ROAD_STRIP_RADIUS, EXCLUDED_TYPES
 from splendor.landuse.types import N_TYPES, ROAD
 from splendor.landuse.corridors import get_link_corridors, get_link_strips
 from splendor.landuse.shares import get_corridor_shares
 
 STUDY_AREA = get_study_area()
+LEVEL = "links"
 NETWORK = network_path(STUDY_AREA)
 
 _, edges = load_network(NETWORK)
@@ -23,6 +24,6 @@ corridor_shares = get_corridor_shares(
 corridor_shares.insert(0, "edge_id", edges["edge_id"].to_numpy())
 
 corridor_shares.to_csv(
-    link_landuse_path(STUDY_AREA, CORRIDOR_RADIUS, ROAD_STRIP_RADIUS),
+    ensure_parent(landuse_path(STUDY_AREA, LEVEL, CORRIDOR_RADIUS, ROAD_STRIP_RADIUS)),
     index=False
 )

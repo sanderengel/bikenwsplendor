@@ -5,7 +5,7 @@ import pickle
 import numpy as np
 from splendor.io import load_network
 from splendor.cli import get_study_area
-from splendor.paths import network_path, loops_path, bikenwloops_loopcensus_path
+from splendor.paths import network_path, loop_census_path, bikenwloops_loopcensus_path
 from splendor.config import LOOP_NUMNODE_BOUND, LOOP_LENGTH_BOUND
 from splendor.loops.census import LoopData, get_loop_edge_ids, build_graph
 from splendor.loops.attributes import loop_max, loop_poi_diversity
@@ -13,7 +13,7 @@ from splendor.loops.attributes import loop_max, loop_poi_diversity
 # Load own graph and census data
 STUDY_AREA = get_study_area()
 NETWORK = network_path(STUDY_AREA)
-OWN = loops_path(STUDY_AREA, LOOP_NUMNODE_BOUND, LOOP_LENGTH_BOUND)
+OWN = loop_census_path(STUDY_AREA)
 nodes, edges = load_network(NETWORK)
 G = build_graph(nodes, edges)
 loops = LoopData.load(OWN)

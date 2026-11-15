@@ -4,12 +4,13 @@ import pandas as pd
 from splendor.io import load_network
 from splendor.cli import get_study_area
 from splendor.paths import (
+    ensure_parent,
     network_path,
-    link_components_path,
-    link_score_grid_path,
-    link_rank_summary_path,
-    link_rank_correlations_path,
-    link_splendor_path
+    components_path,
+    score_grid_path,
+    rank_summary_path,
+    rank_correlations_path,
+    splendor_path
 )
 from splendor.config import (
     CORRIDOR_RADIUS,
@@ -32,11 +33,12 @@ from splendor.components.diversity import get_bounds
 from splendor.composite.sensitivity import get_score_grid, summarize_ranks, get_rank_correlations
 
 STUDY_AREA = get_study_area()
-PATH_ARGS = (STUDY_AREA, CORRIDOR_RADIUS, ROAD_STRIP_RADIUS)
+LEVEL = "links"
+PATH_ARGS = (STUDY_AREA, LEVEL, CORRIDOR_RADIUS, ROAD_STRIP_RADIUS)
 
 # Components are land use diversity per measure and attractiveness, plus POI diversity from the network
 _, edges = load_network(network_path(STUDY_AREA))
-components = pd.read_csv(link_components_path(*PATH_ARGS))
+components = pd.read_csv(components_path(*PATH_ARGS))
 
 score_components = components.merge(
     edges[["edge_id", "poi_diversity"]], on="edge_id", how="inner", validate="one_to_one"
@@ -75,7 +77,7 @@ splendor = splendor[["edge_id", "score", "rank"]]
 assert splendor["edge_id"].is_unique
 assert set(splendor["edge_id"]) == set(edges["edge_id"]), "main specification must match exactly one combination in the grid"
 
-grid.to_csv(link_score_grid_path(*PATH_ARGS), index=False)
-summary.to_csv(link_rank_summary_path(*PATH_ARGS), index=False)
-correlations.to_csv(link_rank_correlations_path(*PATH_ARGS))
-splendor.to_csv(link_splendor_path(*PATH_ARGS), index=False)
+grid.to_csv(ensure_parent(score_grid_path(*PATH_ARGS)), index=False)
+summary.to_csv(ensure_parent(rank_summary_path(*PATH_ARGS)), index=False)
+correlations.to_csv(ensure_parent(rank_correlations_path(*PATH_ARGS)))
+splendor.to_csv(ensure_parent(splendor_path(*PATH_ARGS)), index=False)

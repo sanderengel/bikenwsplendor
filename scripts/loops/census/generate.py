@@ -4,13 +4,13 @@ Load the network given by the study area, build the graph, and save loop data.
 import time
 from splendor.io import load_network
 from splendor.cli import get_study_area
-from splendor.paths import network_path, loops_path
+from splendor.paths import network_path, loop_census_path
 from splendor.loops.census import build_graph, get_loops
 from splendor.config import LOOP_NUMNODE_BOUND, LOOP_LENGTH_BOUND
 
 STUDY_AREA = get_study_area()
 SRC = network_path(STUDY_AREA)
-DST = loops_path(STUDY_AREA, LOOP_NUMNODE_BOUND, LOOP_LENGTH_BOUND)
+DST = loop_census_path(STUDY_AREA)
 
 print(f"Generating {STUDY_AREA} loops using network from '{SRC}'...")
 t0 = time.perf_counter()

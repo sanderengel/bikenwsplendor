@@ -7,10 +7,8 @@ import pandas as pd
 
 from splendor.io import load_network, load_raster
 from splendor.cli import get_study_area
-from splendor.paths import network_path, basemap05_main_types_path, loops_path, loop_landuse_path
+from splendor.paths import ensure_parent, network_path, basemap05_main_types_path, loop_census_path, landuse_path
 from splendor.config import (
-    LOOP_NUMNODE_BOUND,
-    LOOP_LENGTH_BOUND,
     CORRIDOR_RADIUS,
     ROAD_STRIP_RADIUS,
     EXCLUDED_TYPES
@@ -22,12 +20,12 @@ from splendor.landuse.shares import get_unit_shares
 from splendor.loops.census import LoopData
 
 STUDY_AREA = get_study_area()
-PATH_ARGS = (STUDY_AREA, LOOP_NUMNODE_BOUND, LOOP_LENGTH_BOUND)
+LEVEL = "loops"
 
 _, edges = load_network(network_path(STUDY_AREA))
 raster, transform, crs = load_raster(basemap05_main_types_path(STUDY_AREA))
 assert crs == edges.crs, f"CRS mismatch: {crs} vs {edges.crs}"
-loops = LoopData.load(loops_path(*PATH_ARGS))
+loops = LoopData.load(loop_census_path(STUDY_AREA))
 
 # Rows of the pixel matrices must match the columns of the loop x link matrix M
 assert len(edges) == loops.n_network_edges, "edge count differs from the loop data"
@@ -44,6 +42,6 @@ loop_shares = get_unit_shares(
 loop_shares.insert(0, "loop_id", np.arange(loops.n_loops))
 
 loop_shares.to_csv(
-    loop_landuse_path(*PATH_ARGS, CORRIDOR_RADIUS, ROAD_STRIP_RADIUS),
+    ensure_parent(landuse_path(STUDY_AREA, LEVEL, CORRIDOR_RADIUS, ROAD_STRIP_RADIUS)),
     index=False
 )

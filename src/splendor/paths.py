@@ -3,7 +3,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2] # src/splendor/paths.py -> repo root
 
 def ensure_parent(path: str | Path) -> Path:
-    """Create the parent folder of `path` if needed, and return it as a Path."""
+    """Create the parent folder of 'path' if needed, and return it as a Path."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
@@ -27,6 +27,7 @@ def bikenodeplanner_landuse_path(code: str) -> Path:
 
 # Data
 DATA = ROOT / "data"
+PLOTS = ROOT / "plots"
 
 RAW = DATA / "raw"
 INTERIM = DATA / "interim"
@@ -36,11 +37,19 @@ EXP = DATA / "exp"
 def network_path(area: str) -> Path:
     return INTERIM / area / "network.gpkg"
 
-def loops_path(area: str, max_nodes: int, max_length_m: int) -> Path:
-    return PROCESSED / area / f"loops_{max_nodes}_{max_length_m}.npz"
+def _level_dir(area: str, level: str) -> Path:
+    return PROCESSED / area / level
 
-def landuse_polygon_gaps_path(area: str) -> Path:
-    return EXP / area / "landuse_polygon_gaps.gpkg"
+def _level_prefix(level: str) -> str:
+    return level.removesuffix("s")
+
+
+# Loop census
+def loop_census_path(area: str) -> Path:
+    return _level_dir(area, "loops") / "loop_census.npz"
+
+def loop_attributes_path(area: str) -> Path:
+    return _level_dir(area, "loops") / "loop_attributes.csv"
 
 
 # Basemap05 raw
@@ -57,33 +66,35 @@ def basemap05_main_types_path(area: str) -> Path:
 
 
 # Landuse
-def link_landuse_path(area: str, r: float, r_s: float) -> Path:
-    return PROCESSED / area / f"link_landuse_r{r}_rs{r_s}.csv"
+def landuse_path(area: str, level: str, r: float, r_s: float) -> Path:
+    return _level_dir(area, level) / f"{_level_prefix(level)}_landuse_r{r}_rs{r_s}.csv"
 
-# Landuse components
-def link_components_path(area: str, r: float, r_s: float) -> Path:
-    return PROCESSED / area / f"link_components_r{r}_rs{r_s}.csv"
+def landuse_polygon_gaps_path(area: str) -> Path:
+    return EXP / area / "landuse_polygon_gaps.gpkg"
 
-def loop_landuse_path(area, str, max_nodes: int, max_length_m: int, r: float, r_s: float) -> Path:
-    return PROCESSED / area / f"loop_landuse_{max_nodes}_{max_length_m}_r{r}_rs{r_s}"
- 
 
-# Link score
-def link_score_grid_path(area: str, r: float, r_s: float) -> Path:
-    return PROCESSED / area / f"link_score_grid_r{r}_rs{r_s}.csv"
+# Components
+def components_path(area: str, level: str, r: float, r_s: float) -> Path:
+    return _level_dir(area, level) / f"{_level_prefix(level)}_components_r{r}_rs{r_s}.csv"
 
-def link_rank_summary_path(area: str, r: float, r_s: float) -> Path:
-    return PROCESSED / area / f"link_rank_summary_r{r}_rs{r_s}.csv"
 
-def link_rank_correlations_path(area: str, r: float, r_s: float) -> Path:
-    return PROCESSED / area / f"link_rank_correlations_r{r}_rs{r_s}.csv"
+# Score
+def score_grid_path(area: str, level: str, r: float, r_s: float) -> Path:
+    return _level_dir(area, level) / f"{_level_prefix(level)}_score_grid_r{r}_rs{r_s}.csv"
 
-def link_splendor_path(area: str, r: float, r_s: float) -> Path:
-    return PROCESSED / area / f"link_splendor_r{r}_rs{r_s}.csv"
+def rank_summary_path(area: str, level: str, r: float, r_s: float) -> Path:
+    return _level_dir(area, level) / f"{_level_prefix(level)}_rank_summary_r{r}_rs{r_s}.csv"
+
+def rank_correlations_path(area: str, level: str, r: float, r_s: float) -> Path:
+    return _level_dir(area, level) / f"{_level_prefix(level)}_rank_correlations_r{r}_rs{r_s}.csv"
+
+
+# Splendor
+def splendor_path(area: str, level: str, r: float, r_s: float) -> Path:
+    return _level_dir(area, level) / f"{_level_prefix(level)}_splendor_r{r}_rs{r_s}.csv"
 
 
 # Plots
-def link_landuse_plot_path(area: str, r: float, detail: str = "") -> Path:
-    if detail:
-        return ROOT / "plots" / area / f"link_landuse_{detail}_r{r}.png"
-    return ROOT / "plots" / area / f"link_landuse_r{r}.png"
+def landuse_plot_path(area: str, level: str, r: float, detail: str = "") -> Path:
+    suffix = f"_landuse_{detail}_r{r}.png" if detail else f"_landuse_r{r}.png"
+    return PLOTS / area / (_level_prefix(level) + suffix)
