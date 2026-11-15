@@ -41,10 +41,11 @@ link-score = { cmd = "python scripts/links/compute_score.py", depends-on = ["lin
 
 # Loops
 loop-landuse = { cmd = "python scripts/loops/compute_landuse.py", depends-on = ["validate-loops", "clip-basemap"] }
+loop-components = { cmd = "python scripts/loops/compute_components.py", depends-on = ["loop-landuse"] }
 
 # Pipelines
 links = { depends-on = ["link-score"] }
-loops = { depends-on = ["loop-landuse"] }
+loops = { depends-on = ["loop-components"] }
 full = { depends-on = ["links", "loops"] }
 
 [tool.pixi.activation.env]
