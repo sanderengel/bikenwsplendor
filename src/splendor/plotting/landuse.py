@@ -27,8 +27,9 @@ def _landuse_colormap() -> tuple[list[tuple[float, ...]], ListedColormap, Bounda
     return colors, cmap, norm
 
 
-def _link_title(
-    edge_id: int,
+def _panel_title(
+    unit: str,
+    unit_id: int,
     length_km: float,
     n_pixels: int,
     rank: int | None = None,
@@ -36,14 +37,14 @@ def _link_title(
     detail: str | None = None
 ) -> str:
     """
-    Panel title: "Link id (length, pixels)" on one line, or with a rank, score or detail
-    "#rank: Link id (score s)" and "length, pixels[, detail]" on two lines.
+    Panel title: "Unit id (length, pixels)" on one line, or with a rank, score or detail
+    "#rank: Unit id (score s)" and "length, pixels[, detail]" on two lines.
     """
     parts = [f"{length_km:.1f} km", f"{n_pixels:,} pixels"] + ([detail] if detail else [])
     details_text = f"{', '.join(parts)}"
     if rank is None and score is None and detail is None:
-        return f"Link {edge_id} ({details_text})"
-    first = f"#{rank}: Link {edge_id}" if rank is not None else f"Link {edge_id}"
+        return f"{unit} {unit_id} ({details_text})"
+    first = f"#{rank}: {unit} {unit_id}" if rank is not None else f"{unit} {unit_id}"
     if score is not None:
         first += f" (score {score:.2f})"
     return f"{first}\n{details_text}"
@@ -81,7 +82,7 @@ def plot_landuse_map(
     outside = box(left, bottom, right, top).difference(corridor)
     gpd.GeoSeries([outside]).plot(ax=ax, color="white", alpha=.65, linewidth=0)
     gpd.GeoSeries([corridor]).boundary.plot(ax=ax, color="black", linewidth=.6, linestyle="--")
-    ax.plot(*line.xy, color="black", linewidth=1.5)
+    gpd.GeoSeries([line]).plot(ax=ax, color="black", linewidth=1.5)
 
     ax.set_xlim(left, right)
     ax.set_ylim(bottom, top)
@@ -126,16 +127,17 @@ def plot_shares(
         ax.spines[side].set_visible(False)
 
 
-def plot_link_landuse_grid(
-    edge_ids: Sequence[int],
-    edges: gpd.GeoDataFrame,
-    corridors: gpd.GeoSeries,
-    shares: pd.DataFrame,
+def plot_landuse_grid(
+    ids: Sequence[int],
+    lines: gpd.GeoSeries,     # Indexed by id
+    corridors: gpd.GeoSeries, # Indexed by id
+    shares: pd.DataFrame,     # Indexed by id
     raster: np.ndarray,
     transform: Affine,
-    ranks: pd.Series | None = None,   # Indexed by edge_id
-    scores: pd.Series | None = None,  # Indexed by edge_id
-    details: pd.Series | None = None, # Indexed by edge_id
+    ranks: pd.Series | None = None,   # Indexed by id
+    scores: pd.Series | None = None,  # Indexed by id
+    details: pd.Series | None = None, # Indexed by id
+    unit: str = "Link",
     n_cols: int = 4,
     title: str | None = None,
     min_share: float = .01,
@@ -145,30 +147,48 @@ def plot_link_landuse_grid(
     row_height: float = 2.5,
     title_height: float = .3,
 ) -> Figure:
-    """Grid of panels, one per link: land use map with corridor, and its share bars."""
-    n_rows = -(-len(edge_ids) // n_cols)
+    """Grid of panels, one per unit (link or loop): land use map with corridor, and its share bars."""
+    n_rows = -(-len(ids) // n_cols)
     fig = plt.figure(figsize=(col_width * n_cols, row_height * n_rows), layout="constrained")
     title_fig, grid_fig = fig.subfigures(2, 1, height_ratios=[title_height, row_height * n_rows])
     subfigs = grid_fig.subfigures(n_rows, n_cols, wspace=.03, hspace=0, squeeze=False)
 
-    for subfig, edge_id in zip(subfigs.flat, edge_ids):
-        edge_id = int(edge_id)
-        line = edges.geometry.iloc[edge_id]
+    for subfig, unit_id in zip(subfigs.flat, ids):
+        unit_id = int(unit_id)
+        line = lines.loc[unit_id]
         ax_map, ax_bar = subfig.subplots(1, 2, width_ratios=[map_width_ratio, 1])
 
-        plot_landuse_map(ax_map, raster, transform, line, corridors.iloc[edge_id], margin)
-        panel_title = _link_title(
-            edge_id,
+        plot_landuse_map(ax_map, raster, transform, line, corridors.loc[unit_id], margin)
+        panel_title = _panel_title(
+            unit,
+            unit_id,
             line.length / 1000, # m to km
-            int(shares.at[edge_id, "n_pixels"]),
-            rank=int(ranks[edge_id]) if ranks is not None else None,
-            score=float(scores[edge_id]) if scores is not None else None,
-            detail=details[edge_id] if details is not None else None
+            int(shares.at[unit_id, "n_pixels"]),
+            rank=int(ranks[unit_id]) if ranks is not None else None,
+            score=float(scores[unit_id]) if scores is not None else None,
+            detail=details[unit_id] if details is not None else None
         )
         ax_map.set_title(panel_title, fontsize=10, loc="left")
 
-        plot_shares(ax_bar, shares.loc[edge_id], min_share, map_width_ratio)
+        plot_shares(ax_bar, shares.loc[unit_id], min_share, map_width_ratio)
 
     if title:
         title_fig.suptitle(title, fontsize=14)
     return fig
+
+
+def plot_link_landuse_grid(
+    edge_ids: Sequence[int],
+    edges: gpd.GeoDataFrame,
+    corridors: gpd.GeoSeries, # Same order as edges
+    shares: pd.DataFrame,
+    raster: np.ndarray,
+    transform: Affine,
+    **kwargs,
+) -> Figure:
+    """Land use grid for links: plot_landuse_grid with lines and corridors indexed by edge_id."""
+    ids = edges["edge_id"].to_numpy()
+    return plot_landuse_grid(
+        edge_ids, edges.geometry.set_axis(ids), corridors.set_axis(ids),
+        shares, raster, transform, unit="Link", **kwargs
+    )
