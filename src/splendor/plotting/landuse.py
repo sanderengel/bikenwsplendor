@@ -5,7 +5,9 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import BoundaryNorm, ListedColormap
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from matplotlib.patches import Patch
 from rasterio import windows
+from rasterio.transform import array_bounds
 from shapely import Geometry
 from shapely.geometry import box
 from affine import Affine
@@ -50,6 +52,18 @@ def _panel_title(
     return f"{first}\n{details_text}"
 
 
+def _fit_extent(
+    extent: tuple[float, float, float, float],
+    bounds: tuple[float, float, float, float],
+) -> tuple[float, float, float, float]:
+    """Shift an extent so it lies within the bounds where possible, keeping its size."""
+    left, bottom, right, top = extent
+    b_left, b_bottom, b_right, b_top = bounds
+    dx = max(b_left - left, 0) - max(right - b_right, 0)
+    dy = max(b_bottom - bottom, 0) - max(top - b_top, 0)
+    return left + dx, bottom + dy, right + dx, top + dy
+
+
 def get_map_extent(geom: Geometry, margin: float) -> tuple[float, float, float, float]:
     """Square extent around a geometry padded by 'margin' of its larger side."""
     minx, miny, maxx, maxy = geom.bounds
@@ -69,8 +83,10 @@ def plot_landuse_map(
     """Plot land use around one link on the given ax."""
     _, cmap, norm = _landuse_colormap()
 
-    # Raster window around the corridor
-    map_extent = get_map_extent(corridor, margin)
+    # Square raster window around the corridor, shifted inward at the raster edge
+    raster_bounds = array_bounds(*raster.shape, transform) # (west, south, east, north)
+    map_extent = _fit_extent(get_map_extent(corridor, margin), raster_bounds)
+    map_left, map_bottom, map_right, map_top = map_extent
     window = get_bounds_window(map_extent, transform, raster.shape, clip=True)
     left, bottom, right, top = windows.bounds(window, transform)
     ax.imshow(
@@ -79,13 +95,13 @@ def plot_landuse_map(
     )
 
     # Dim everything outside the corridor
-    outside = box(left, bottom, right, top).difference(corridor)
+    outside = box(*map_extent).difference(corridor)
     gpd.GeoSeries([outside]).plot(ax=ax, color="white", alpha=.65, linewidth=0)
     gpd.GeoSeries([corridor]).boundary.plot(ax=ax, color="black", linewidth=.6, linestyle="--")
     gpd.GeoSeries([line]).plot(ax=ax, color="black", linewidth=1.5)
 
-    ax.set_xlim(left, right)
-    ax.set_ylim(bottom, top)
+    ax.set_xlim(map_left, map_right)
+    ax.set_ylim(map_bottom, map_top)
     ax.set_aspect("equal")
     ax.set_xticks([])
     ax.set_yticks([])
@@ -93,38 +109,33 @@ def plot_landuse_map(
     ax.set_ylabel("")
 
 
-def plot_shares(
-    ax: Axes,
-    row: pd.Series,
-    min_share: float = .01,
-    box_aspect: float = 1.6,
-) -> None:
-    """Horizontal bars of the link's land use shares in fixed type order."""
-    colors, _, _ = _landuse_colormap()
-
-    # Extract shares above minimum for the link, skipping excluded types
+def _present_shares(row: pd.Series) -> pd.Series:
+    """Shares above zero by type id, in fixed type order, skipping excluded types."""
     s = pd.Series({
         k: row[get_share_column_name(k)]
         for k in range(1, N_TYPES + 1)
         if get_share_column_name(k) in row.index
     })
-    s = s[s >= min_share]
+    return s[s > 0]
 
-    # Create rows
-    n_rows = max(len(s), 5) # Fixed minimum
-    y = n_rows - 1 - np.arange(len(s)) # First type at the top
-    ax.barh(y, s.to_numpy(), color=[colors[k] for k in s.index], height=.7)
-    ax.set_yticks(y, [SHORT_NAMES[k] for k in s.index], fontsize=8)
-    for yi, v in zip(y, s.to_numpy()):
-        ax.text(v + .03, yi, f"{v:.0%}", va="center", fontsize=8, color="0.3")
 
-    ax.set_xlim(0, 1.3)
-    ax.set_ylim(-.6, n_rows - .4)
-    ax.set_box_aspect(box_aspect) # Same height as square map next to it
-    ax.set_xticks([])
-    ax.tick_params(axis="y", length=0)
-    for side in ("top", "right", "bottom"):
-        ax.spines[side].set_visible(False)
+def plot_share_bar(ax: Axes, row: pd.Series) -> None:
+    """One horizontal 100% bar of the unit's land use shares, in fixed type order."""
+    colors, _, _ = _landuse_colormap()
+    left = 0.0
+    for k, share in _present_shares(row).items():
+        ax.barh(0, share, left=left, color=colors[k], height=1)
+        left += share
+    ax.set_xlim(0, 1)
+    ax.set_ylim(-.5, .5)
+    ax.set_axis_off()
+
+
+def _add_landuse_legend(fig: Figure, type_ids: Sequence[int]) -> None:
+    """One row of color patches for the given land use types."""
+    colors, _, _ = _landuse_colormap()
+    handles = [Patch(color=colors[k], label=SHORT_NAMES[k]) for k in type_ids]
+    fig.legend(handles=handles, loc="center", ncol=len(handles), frameon=False, fontsize=9)
 
 
 def plot_landuse_grid(
@@ -140,38 +151,52 @@ def plot_landuse_grid(
     unit: str = "Link",
     n_cols: int = 4,
     title: str | None = None,
-    min_share: float = .01,
     margin: float = .15,
-    map_width_ratio: float = 1.6,
-    col_width: float = 3.8,
-    row_height: float = 2.5,
+    bar_height: float = .06, # Fraction of the map's height
+    bar_gap: float = .02,    # Fraction of the map's height
+    col_width: float = 3.4,
+    row_height: float = 3.9,
     title_height: float = .3,
+    legend_height: float = .3,
 ) -> Figure:
-    """Grid of panels, one per unit (link or loop): land use map with corridor, and its share bars."""
+    """
+    Grid of panels, one per unit (link or loop): land use map with corridor, and a 100% bar of its shares
+    below it. One legend for all panels lists the land use types present.
+    """
     n_rows = -(-len(ids) // n_cols)
-    fig = plt.figure(figsize=(col_width * n_cols, row_height * n_rows), layout="constrained")
-    title_fig, grid_fig = fig.subfigures(2, 1, height_ratios=[title_height, row_height * n_rows])
+    fig = plt.figure(
+        figsize=(col_width * n_cols, title_height + row_height * n_rows + legend_height),
+        layout="constrained",
+    )
+    title_fig, grid_fig, legend_fig = fig.subfigures(
+        3, 1, height_ratios=[title_height, row_height * n_rows, legend_height]
+    )
     subfigs = grid_fig.subfigures(n_rows, n_cols, wspace=.03, hspace=0, squeeze=False)
 
+    present = set()
     for subfig, unit_id in zip(subfigs.flat, ids):
         unit_id = int(unit_id)
         line = lines.loc[unit_id]
-        ax_map, ax_bar = subfig.subplots(1, 2, width_ratios=[map_width_ratio, 1])
+        row = shares.loc[unit_id]
+        ax_map = subfig.subplots()
+        ax_bar = ax_map.inset_axes([0, -(bar_gap + bar_height), 1, bar_height]) # Below the map, same width
 
         plot_landuse_map(ax_map, raster, transform, line, corridors.loc[unit_id], margin)
         panel_title = _panel_title(
             unit,
             unit_id,
             line.length / 1000, # m to km
-            int(shares.at[unit_id, "n_pixels"]),
+            int(row["n_pixels"]),
             rank=int(ranks[unit_id]) if ranks is not None else None,
             score=float(scores[unit_id]) if scores is not None else None,
             detail=details[unit_id] if details is not None else None
         )
         ax_map.set_title(panel_title, fontsize=10, loc="left")
 
-        plot_shares(ax_bar, shares.loc[unit_id], min_share, map_width_ratio)
+        plot_share_bar(ax_bar, row)
+        present |= set(_present_shares(row).index)
 
+    _add_landuse_legend(legend_fig, sorted(present))
     if title:
         title_fig.suptitle(title, fontsize=14)
     return fig
