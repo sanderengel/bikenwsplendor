@@ -1,9 +1,11 @@
 import math
 import numpy as np
+from typing import Sequence
 from rasterio.features import geometry_mask
 from rasterio import windows
 from shapely import Geometry
 from affine import Affine
+from scipy.sparse import csr_array
 
 
 def get_bounds_window(
@@ -61,3 +63,34 @@ def get_pixel_values(geom: Geometry, raster: np.ndarray, transform: Affine) -> n
     """Return the raster values of all pixels whose center lies inside the geom."""
     window, mask = _get_window_mask(geom, transform, raster.shape)
     return raster[window.toslices()][mask]
+
+
+def get_pixel_ids(geom: Geometry, raster_shape: tuple[int, int], transform: Affine) -> np.ndarray:
+    """
+    Return flat ids (row * n_cols + col) of all pixels with centers inside the geom
+    in increasing order (the same order as get_pixel_values).
+    """
+    window, mask = _get_window_mask(geom, transform, raster_shape)
+    rows, cols = np.nonzero(mask)
+    rows = rows.astype(np.int64) + int(window.row_off) # int64: a full Denmark raster exceeds int32
+    cols = cols.astype(np.int64) + int(window.col_off)
+    return rows * raster_shape[1] + cols
+
+
+def get_pixel_matrix(
+    geoms: Sequence[Geometry],
+    raster_shape: tuple[int, int],
+    transform: Affine,
+) -> csr_array:
+    """
+    Return a sparse binary matrix with one row per geom (in the given order) and one column
+    per raster pixel (flat id), with 1 where the pixel's center lies inside the geom.
+    """
+    ids = [get_pixel_ids(geom, raster_shape, transform) for geom in geoms]
+    indptr = np.zeros(len(ids) + 1, dtype=np.int64)
+    indptr[1:] = np.cumsum([len(i) for i in ids])
+    indices = np.concatenate(ids) if ids else np.empty(0, dtype=np.int64)
+    return csr_array(
+        (np.ones(len(indices), dtype=np.int8), indices, indptr),
+        shape=(len(ids), raster_shape[0] * raster_shape[1])
+    )
