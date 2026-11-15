@@ -7,11 +7,11 @@ from affine import Affine
 
 
 def get_bounds_window(
-        bounds: tuple[float, float, float, float],
-        transform: Affine,
-        raster_shape: tuple[int, int],
-        clip: bool = False,
-    ) -> windows.Window:
+    bounds: tuple[float, float, float, float],
+    transform: Affine,
+    raster_shape: tuple[int, int],
+    clip: bool = False,
+) -> windows.Window:
     """
     Return the pixel window covering the bounds, snapped outward to whole pixels so that
     every pixel touched by the bounds is included. With 'clip', the window is cut to the
@@ -34,19 +34,30 @@ def get_bounds_window(
     return windows.Window.from_slices((r_start, r_stop), (c_start, c_stop))
 
 
-def get_pixel_values(geom: Geometry, raster: np.ndarray, transform: Affine) -> np.ndarray:
-    """Return the raster values of all pixels whose center lies inside the geom."""
-    window = get_bounds_window(geom.bounds, transform, raster.shape)
-    window_values = raster[window.toslices()]
+def _get_window_mask(
+    geom: Geometry,
+    transform: Affine,
+    raster_shape: tuple[int, int]
+) -> tuple[windows.Window, np.ndarray]:
+    """
+    Return the pixel window covering the geom, 
+    and the mask of window pixels whose center lies inside it.
+    """
+    window = get_bounds_window(geom.bounds, transform, raster_shape)
 
     # Geotransform of the window (same pixel size with origin shifted to the window's corner)
     window_transform = windows.transform(window, transform)
 
     mask = geometry_mask(
         [geom], # List of geometries, here is a single geom
-        out_shape=window_values.shape,
+        out_shape=(int(window.height), int(window.width)),
         transform=window_transform,
         invert=True # True for pixels whose center is in the geom
     )
+    return window, mask
 
-    return window_values[mask]
+
+def get_pixel_values(geom: Geometry, raster: np.ndarray, transform: Affine) -> np.ndarray:
+    """Return the raster values of all pixels whose center lies inside the geom."""
+    window, mask = _get_window_mask(geom, transform, raster.shape)
+    return raster[window.toslices()][mask]
