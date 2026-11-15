@@ -1,3 +1,4 @@
+import pytest
 import numpy as np
 
 from splendor.loops.census import LoopData, get_loops
@@ -38,10 +39,21 @@ def test_save_load_roundtrip(k4_loops, tmp_path):
     """Loop data that is loaded should equal the original."""
     path = tmp_path / "loops.npz"
     k4_loops.save(path)
-    loops_loaded = LoopData.load(path)
+    loops_loaded = LoopData.load(path, max_nodes=k4_loops.max_nodes, max_length_m=k4_loops.max_length_m)
 
     for attr in ["nodes", "edges", "lengths_m", "ptr"]:
         np.testing.assert_array_equal(getattr(loops_loaded, attr), getattr(k4_loops, attr))
-    
+
     assert loops_loaded.n_network_nodes == k4_loops.n_network_nodes
     assert loops_loaded.n_network_edges == k4_loops.n_network_edges
+    assert loops_loaded.max_nodes == k4_loops.max_nodes
+    assert loops_loaded.max_length_m == k4_loops.max_length_m
+
+
+def test_load_bounds_mismatch_error(k4_loops, tmp_path):
+    """Loading loop data generated with other census bounds than expected should raise an error."""
+    path = tmp_path / "loops.npz"
+    k4_loops.save(path)
+
+    with pytest.raises(ValueError):
+        LoopData.load(path, max_nodes=k4_loops.max_nodes + 1, max_length_m=k4_loops.max_length_m)
