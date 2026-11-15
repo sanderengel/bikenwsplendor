@@ -19,6 +19,9 @@ platforms = ["osx-arm64"]
 [tool.pixi.pypi-dependencies]
 splendor = { path = ".", editable = true }
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.pixi.tasks]
 lab = "jupyter lab"
 test = "pytest"
