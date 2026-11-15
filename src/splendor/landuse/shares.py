@@ -16,6 +16,46 @@ def get_share_type_id(column_name: str) -> int:
     return int(column_name.removeprefix(SHARE_PREFIX))
 
 
+def check_excluded_types(excluded_types: Sequence[int], n_types: int) -> np.ndarray:
+    """Return the excluded types as a sorted array of unique ids, check that they are valid type ids."""
+    excluded_types = np.unique(np.asarray(excluded_types, dtype=int))
+    if ((excluded_types < 1) | (excluded_types > n_types)).any():
+        raise ValueError(f"excluded types must be in 1..{n_types}")
+    return excluded_types
+
+
+def get_shares_from_counts(
+    counts: np.ndarray,
+    index: pd.Index,
+    excluded_types: Sequence[int] = ()
+) -> pd.DataFrame:
+    """
+    Return the shares of each row of pixel counts per type, where column k counts type k
+    and column 0 counts no data. Leave no data and 'excluded_types' out of the shares.
+    Excluded pixels are counted in the column 'n_excludedø.
+    """
+    n_types = counts.shape[1] - 1
+    excluded_types = check_excluded_types(excluded_types, n_types)
+
+    kept = np.ones(n_types + 1, dtype=bool)
+    kept[0] = False        # No data
+    kept[excluded_types] = False # Excluded
+
+    n_pixels = counts[:, kept].sum(axis=1)
+    assert (n_pixels > 0).all(), "corridor with no land use pixels"
+    shares = counts[:, kept] / n_pixels[:, None] # Normalize each row
+
+    kept_types = np.flatnonzero(kept)
+    corridor_shares = pd.DataFrame(
+        shares,
+        columns = [get_share_column_name(k) for k in kept_types],
+        index = index
+    )
+    corridor_shares.insert(0, "n_pixels", n_pixels)
+    corridor_shares.insert(1, "n_excluded", counts[:, excluded_types].sum(axis=1))
+    return corridor_shares
+
+
 def get_corridor_shares(
     corridors: gpd.GeoSeries,
     raster: np.ndarray,
@@ -30,9 +70,7 @@ def get_corridor_shares(
     Treat types in 'excluded_types' as no data by leaving them out of the shares,
     though their pixels are counted in the column 'n_excluded'.
     """
-    excluded_types = np.unique(np.asarray(excluded_types, dtype=int))
-    if ((excluded_types < 1) | (excluded_types > n_types)).any():
-        raise ValueError(f"excluded types must be in 1..{n_types}")
+    excluded_types = check_excluded_types(excluded_types, n_types)
     if strips is not None:
         if strip_excluded_type is None:
             raise ValueError("strips given without a type to exclude")
@@ -54,23 +92,7 @@ def get_corridor_shares(
             values = np.concatenate([rest_values, strip_values])
         counts[i] = np.bincount(values, minlength=n_types + 1)
 
-    kept = np.ones(n_types + 1, dtype=bool)
-    kept[0] = False        # No data
-    kept[excluded_types] = False # Excluded
-
-    n_pixels = counts[:, kept].sum(axis=1)
-    assert (n_pixels > 0).all(), "corridor with no land use pixels"
-    shares = counts[:, kept] / n_pixels[:, None] # Normalize each row
-
-    kept_types = np.flatnonzero(kept)
-    corridor_shares = pd.DataFrame(
-        shares,
-        columns = [get_share_column_name(k) for k in kept_types],
-        index = corridors.index
-    )
-    corridor_shares.insert(0, "n_pixels", n_pixels)
-    corridor_shares.insert(1, "n_excluded", counts[:, excluded_types].sum(axis=1))
-    return corridor_shares
+    return get_shares_from_counts(counts, corridors.index, excluded_types)
 
 
 def get_shares_array(shares: pd.DataFrame | pd.Series) -> np.ndarray:
