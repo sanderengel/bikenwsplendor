@@ -7,7 +7,10 @@ from splendor.composite.sensitivity import (
     get_score_grid,
     summarize_ranks,
     get_rank_correlations,
+    select_weights,
+    get_main_scores,
     COMBINATION_COLUMNS,
+    WEIGHT_COLUMNS,
 )
 
 MEASURES = ("shannon", "richness")
@@ -23,6 +26,11 @@ BOUNDS = {
     "diversity_richness": (1, 10),
     "poi_diversity": (0, 3),
     "attractiveness": (0, 1)
+}
+
+MAIN = { # Shannon, bounds, mean, land use only: scores are Shannon / ln 13
+    "measure": "shannon", "normalization": "bounds", "aggregation": "mean",
+    "land_use_weight": 1.0, "poi_weight": 0.0, "attractiveness_weight": 0.0,
 }
 
 
@@ -118,3 +126,34 @@ def test_grid_unnamed_index_error(components):
     """Components without a named id index should raise an error."""
     with pytest.raises(ValueError):
         get_score_grid(components.reset_index(drop=True), MEASURES, NORMALIZATIONS, AGGREGATIONS, WEIGHTS, BOUNDS, P, 0.25)
+
+
+def test_select_weights_keeps_only_given_tuples(grid, components):
+    """Only rows with one of the given weight tuples are kept, with all their combinations and units."""
+    selected = select_weights(grid, [(0.5, 0.5, 0.0), (1.0, 0.0, 0.0)])
+
+    kept = set(selected[WEIGHT_COLUMNS].itertuples(index=False, name=None))
+    assert kept == {(0.5, 0.5, 0.0), (1.0, 0.0, 0.0)}
+    assert len(selected) == 2 * len(grid) // len(WEIGHTS)
+
+
+def test_main_scores_one_row_per_unit(grid, components):
+    """The main specification gives one row per unit, with its score and rank."""
+    main = get_main_scores(grid, MAIN, "edge_id")
+
+    assert list(main.columns) == ["edge_id", "score", "rank"]
+    assert main["edge_id"].to_list() == components.index.to_list()
+    np.testing.assert_allclose(main["score"], components["diversity_shannon"].to_numpy() / math.log(13))
+
+
+def test_main_scores_several_combinations_error(grid):
+    """A specification that matches several combinations should raise an error."""
+    incomplete = {k: v for k, v in MAIN.items() if k != "aggregation"} # Matches mean and geometric
+    with pytest.raises(ValueError):
+        get_main_scores(grid, incomplete, "edge_id")
+
+
+def test_main_scores_no_combination_error(grid):
+    """A specification that matches no combination should raise an error."""
+    with pytest.raises(ValueError):
+        get_main_scores(grid, MAIN | {"land_use_weight": 0.9}, "edge_id")
