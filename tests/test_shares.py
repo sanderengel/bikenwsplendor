@@ -2,10 +2,20 @@ import pytest
 import numpy as np
 import pandas as pd
 from rasterio.transform import rowcol
+from rasterio.features import geometry_mask
+from scipy.sparse import csr_array
+from shapely import LineString
 
 from splendor.landuse.corridors import get_link_strips, get_link_corridors
-from splendor.landuse.shares import get_share_column_name, get_corridor_shares, get_shares_array
+from splendor.landuse.shares import (
+    get_share_column_name,
+    get_corridor_shares,
+    get_shares_array,
+    get_shares_from_counts,
+    get_unit_shares
+)
 from splendor.landuse.types import N_TYPES, ROAD, UNCLASSIFIED
+from splendor.landuse.raster import get_pixel_matrix
 
 
 def test_shares_full_forest(half_raster, make_edges):
@@ -371,3 +381,62 @@ def test_shares_all_excluded_error(half_raster, make_edges):
     raster, transform = half_raster
     with pytest.raises(AssertionError):
         get_corridor_shares(corridors, raster, transform, N_TYPES, excluded_types=(4,))
+
+
+def _membership(units: list[list[int]], n_links: int) -> csr_array:
+    """Unit x link matrix with 1 where the link belongs to the unit."""
+    indices = [i for unit in units for i in unit]
+    indptr = np.cumsum([0] + [len(unit) for unit in units])
+    return csr_array((np.ones(len(indices), dtype=np.int8), indices, indptr), shape=(len(units), n_links))
+
+
+def _get_unit_shares(edges, units, r, r_s, raster, transform, chunk_size=500) -> pd.DataFrame:
+    """Shares of units made of the edges, with full buffers of radius r and strips of radius r_s."""
+    buffers = get_pixel_matrix(edges.geometry.buffer(r), raster.shape, transform)
+    strips = get_pixel_matrix(get_link_strips(edges, r_s), raster.shape, transform)
+    return get_unit_shares(
+        _membership(units, len(edges)), pd.RangeIndex(len(units)), buffers, raster, N_TYPES,
+        strips=strips, strip_excluded_type=ROAD[0], excluded_types=(UNCLASSIFIED[0],), chunk_size=chunk_size
+    )
+
+
+def test_unit_shares_match_full_mask(random_raster, make_edges):
+    """
+    The shares of a closed unit (e.g. a loop) should be those of all pixels within r of its line,
+    minus the road pixels within r_s of it.
+    """
+    x, y = 300.5, 300.5
+    L = 300
+    r, r_s = 40, 10
+    a, b, c, d = (x, y), (x + L, y), (x + L, y + L), (x, y + L) # Square, off the pixel grid
+    edges = make_edges([a, b], [b, c], [c, d], [d, a])
+
+    raster, transform = random_raster
+    shares = _get_unit_shares(edges, [[0, 1, 2, 3]], r, r_s, raster, transform)
+
+    # Brute force, masks over the whole raster
+    ring = LineString([a, b, c, d, a])
+    in_corridor = geometry_mask([ring.buffer(r)], out_shape=raster.shape, transform=transform, invert=True)
+    in_strip = geometry_mask([ring.buffer(r_s)], out_shape=raster.shape, transform=transform, invert=True)
+    own_road = in_strip & (raster == ROAD[0])
+    assert own_road.any() # The strip exclusion is actually tested
+
+    counts = np.bincount(raster[in_corridor & ~own_road], minlength=N_TYPES + 1)[None, :]
+    expected = get_shares_from_counts(counts, shares.index, (UNCLASSIFIED[0],))
+    pd.testing.assert_frame_equal(shares, expected)
+
+
+def test_unit_shares_independent_of_chunk_size(random_raster, make_edges):
+    """The shares should not depend on how many units are processed at once."""
+    x, y = 300.5, 300.5
+    L = 300
+    r, r_s = 40, 10
+    a, b, c, d = (x, y), (x + L, y), (x + L, y + L), (x, y + L) # Square with diagonal ac
+    edges = make_edges([a, b], [b, c], [c, d], [d, a], [a, c])
+    units = [[0, 1, 4], [4, 2, 3], [0, 1, 2, 3]] # Two triangles and the square
+
+    raster, transform = random_raster
+    one_by_one = _get_unit_shares(edges, units, r, r_s, raster, transform, chunk_size=1)
+    all_at_once = _get_unit_shares(edges, units, r, r_s, raster, transform, chunk_size=1000)
+
+    pd.testing.assert_frame_equal(one_by_one, all_at_once)
