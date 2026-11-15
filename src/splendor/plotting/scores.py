@@ -28,15 +28,22 @@ def plot_link_values(
     norm: Normalize,
     low_is_best: bool = False,
     linewidth: float = 1.5,
+    allow_missing: bool = False,
 ) -> None:
-    """Links as lines colored by a value per link ('values' indexed by edge_id). The best links are drawn on top."""
+    """
+    Links as lines colored by a value per link ('values' indexed by edge_id). The best links are drawn on top.
+    With 'allow_missing', links without a value are drawn thin and gray; otherwise they raise an error.
+    """
     data = edges[["edge_id", "geometry"]].merge(
         values.rename("value"), left_on="edge_id", right_index=True, how="left", validate="one_to_one"
     )
-    if data["value"].isna().any():
-        raise ValueError(f"{data['value'].isna().sum()} links have no value")
+    missing = data["value"].isna()
+    if missing.any():
+        if not allow_missing:
+            raise ValueError(f"{missing.sum()} links have no value")
+        data[missing].plot(ax=ax, color="darkgray", linewidth=linewidth / 2)
 
-    data = data.sort_values("value", ascending=not low_is_best) # Best last, so on top
+    data = data[~missing].sort_values("value", ascending=not low_is_best) # Best last, so on top
     data.plot(ax=ax, column="value", cmap=cmap, norm=norm, linewidth=linewidth)
     ax.set_title(title)
     ax.set_aspect("equal")
@@ -51,6 +58,7 @@ def plot_link_maps(
     labels: Sequence[str],
     low_is_best: Sequence[bool] | None = None,
     panel_size: tuple[float, float] = (5, 5),
+    allow_missing: bool = False
 ) -> Figure:
     """One map per column of 'data' (which holds edge_id), side by side, each with its own colorbar."""
     low_is_best = low_is_best or [False] * len(columns)
@@ -62,7 +70,7 @@ def plot_link_maps(
         values = data.set_index("edge_id")[column]
         norm = Normalize(values.min(), values.max())
         cmap = sequential_cmap(reverse=low) # Dark = best
-        plot_link_values(ax, edges, values, title, cmap, norm, low)
+        plot_link_values(ax, edges, values, title, cmap, norm, low, allow_missing=allow_missing)
         _add_colorbar(fig, ax, cmap, norm, label)
     return fig
 
@@ -114,4 +122,59 @@ def plot_rank_correlations(
     ax.set_xlabel(f"Within blocks, sorted by: {inner}", fontsize=8)
     ax.set_title(title)
     fig.colorbar(image, ax=ax, label="Spearman correlation", shrink=.7)
+    return fig
+
+
+def plot_node_values(
+    ax: Axes,
+    nodes: gpd.GeoDataFrame,
+    edges: gpd.GeoDataFrame,
+    values: pd.Series,
+    title: str,
+    cmap: Colormap,
+    norm: Normalize,
+    low_is_best: bool = False,
+    markersize: float = 12,
+) -> None:
+    """
+    Nodes as points colored by a value per node ('values' indexed by node_id), over the links in gray.
+    The best nodes are drawn on top; nodes without a value are drawn small and gray.
+    """
+    edges.plot(ax=ax, color="lightgray", linewidth=.6, zorder=1)
+    data = nodes[["node_id", "geometry"]].merge(
+        values.rename("value"), left_on="node_id", right_index=True, how="left", validate="one_to_one"
+    )
+    missing = data["value"].isna()
+    if missing.any():
+        data[missing].plot(ax=ax, color="darkgray", markersize=markersize / 3, zorder=2)
+
+    data = data[~missing].sort_values("value", ascending=not low_is_best) # Best last, so on top
+    data.plot(ax=ax, column="value", cmap=cmap, norm=norm, markersize=markersize, zorder=3)
+    ax.set_title(title)
+    ax.set_aspect("equal")
+    ax.set_axis_off()
+
+
+def plot_node_maps(
+    nodes: gpd.GeoDataFrame,
+    edges: gpd.GeoDataFrame,
+    data: pd.DataFrame,
+    columns: Sequence[str],
+    titles: Sequence[str],
+    labels: Sequence[str],
+    low_is_best: Sequence[bool] | None = None,
+    panel_size: tuple[float, float] = (5, 5),
+) -> Figure:
+    """One node map per column of 'data' (which holds node_id), side by side, each with its own colorbar."""
+    low_is_best = low_is_best or [False] * len(columns)
+    fig, axes = plt.subplots(
+        1, len(columns), figsize=(panel_size[0] * len(columns), panel_size[1]),
+        squeeze=False, layout="constrained",
+    )
+    for ax, column, title, label, low in zip(axes.flat, columns, titles, labels, low_is_best):
+        values = data.set_index("node_id")[column]
+        norm = Normalize(values.min(), values.max())
+        cmap = sequential_cmap(reverse=low) # Dark = best
+        plot_node_values(ax, nodes, edges, values, title, cmap, norm, low)
+        _add_colorbar(fig, ax, cmap, norm, label)
     return fig
