@@ -99,6 +99,10 @@ class LoopData:
             )
         return loops
 
+    def loop_edges(self, loop_id: int) -> np.ndarray:
+        """Edge ids of one loop."""
+        return self.edges[self.ptr[loop_id]:self.ptr[loop_id + 1]]
+
 
 def build_graph(nodes: gpd.GeoDataFrame, edges: gpd.GeoDataFrame) -> nx.Graph:
     """Build undirected networkX graph with edge_id and length_m on each edge."""
