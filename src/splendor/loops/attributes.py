@@ -34,3 +34,21 @@ def loop_poi_diversity(
         + loop_any(loops, has_service)
         + loop_any(loops, has_attraction)
     )
+
+
+def _max_over_loops(ids: np.ndarray, values: np.ndarray, n: int) -> np.ndarray:
+    """Maximum of the values per id over all loop positions. NaN for ids on no loop."""
+    out = np.full(n, -np.inf)
+    np.maximum.at(out, ids, values)
+    out[np.isneginf(out)] = np.nan
+    return out
+
+
+def node_max(loops: LoopData, loop_values: np.ndarray) -> np.ndarray:
+    """Maximum of a loop value over the loops through each node. NaN for nodes on no loop."""
+    return _max_over_loops(loops.nodes, np.repeat(loop_values, loops.sizes), loops.n_network_nodes)
+
+
+def edge_max(loops: LoopData, loop_values: np.ndarray) -> np.ndarray:
+    """Maximum of a loop value over the loops along each edge. NaN for edges on no loop."""
+    return _max_over_loops(loops.edges, np.repeat(loop_values, loops.sizes), loops.n_network_edges)
