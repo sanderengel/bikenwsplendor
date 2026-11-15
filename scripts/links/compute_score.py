@@ -28,7 +28,7 @@ from splendor.config import (
     MAIN_SPECIFICATION
 )
 from splendor.landuse.types import N_TYPES
-from splendor.diversity import get_bounds
+from splendor.components.diversity import get_bounds
 from splendor.composite.sensitivity import get_score_grid, summarize_ranks, get_rank_correlations
 
 STUDY_AREA = get_study_area()

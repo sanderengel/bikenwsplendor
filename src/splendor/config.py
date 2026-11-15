@@ -15,7 +15,7 @@ STUDY_AREA = "pilot"
 EXCLUDED_TYPES = (13,) # 13 is UNCLASSIFIED (see src/splendor/landuse/types.py)
 
 DIVERSITY_MEASURES = (
-    # See src/splendor/diversity.py for supported functions
+    # See src/splendor/components/diversity.py for supported functions
     "shannon",
     # "inverse_simpson", # Ranks almost identically to Shannon (see notebooks/exp/link_components.ipynb)
     "richness"

@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 import pandas as pd
 
-from splendor.attractiveness import get_attractiveness
+from splendor.components.attractiveness import get_attractiveness
 
 VALUES = {1: 0.0, 4: 0.5, 12: 1.0}
 

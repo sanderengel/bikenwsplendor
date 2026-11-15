@@ -2,8 +2,8 @@ import math
 import pytest
 import numpy as np
 
-from splendor import diversity
-from splendor.diversity import get_diversity, MEASURES, get_bounds
+from splendor.components import diversity
+from splendor.components.diversity import get_diversity, MEASURES, get_bounds
 
 DOMINATED = [.05, .05, .1, .8]
 UNIFORM = [.25, .25, .25, .25]
