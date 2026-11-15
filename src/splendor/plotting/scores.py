@@ -1,4 +1,4 @@
-"""Plots of link scores and how sensitive they are to the methodological choices."""
+"""Plots of scores and how sensitive they are to the methodological choices."""
 import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
@@ -9,6 +9,14 @@ from matplotlib.figure import Figure
 from typing import Sequence
 
 from splendor.plotting.style import sequential_cmap
+
+
+def _add_colorbar(fig: Figure, ax: Axes, cmap: Colormap, norm: Normalize, label: str) -> None:
+    fig.colorbar(
+        ScalarMappable(norm=norm, cmap=cmap),
+        ax=ax, label=label,
+        location="bottom", shrink=.6, aspect=30, pad=.02
+    )
 
 
 def plot_link_values(
@@ -55,11 +63,7 @@ def plot_link_maps(
         norm = Normalize(values.min(), values.max())
         cmap = sequential_cmap(reverse=low) # Dark = best
         plot_link_values(ax, edges, values, title, cmap, norm, low)
-        fig.colorbar(
-            ScalarMappable(norm=norm, cmap=cmap), 
-            ax=ax, label=label,
-            location="bottom", shrink=.6, aspect=30, pad=.02
-        )
+        _add_colorbar(fig, ax, cmap, norm, label)
     return fig
 
 
