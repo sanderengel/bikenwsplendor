@@ -28,14 +28,13 @@ BOUNDS = {
 
 @pytest.fixture
 def components() -> pd.DataFrame:
-    """Four links with non-consecutive edge ids."""
+    """Four links with non-consecutive edge ids as the index."""
     return pd.DataFrame({
-        "edge_id": [10, 11, 12, 13],
         "diversity_shannon": [0.2, 0.8, 1.2, 0.5],
         "diversity_richness": [1, 2, 3, 2],
         "poi_diversity": [0, 1, 3, 2],
         "attractiveness": [0.0, 0.25, 1.0, 0.5]
-    })
+    }, index=pd.Index([10, 11, 12, 13], name="edge_id"))
 
 
 @pytest.fixture
@@ -49,10 +48,10 @@ def test_grid_covers_every_combination_for_every_link(grid, components):
     assert (sizes == len(components)).all()
 
 
-def test_grid_keeps_edge_ids(grid, components):
-    """Every combination has all links, in the input order."""
+def test_grid_keeps_ids(grid, components):
+    """Every combination has all units, in the input order, in a column named after the index."""
     for _, group in grid.groupby(COMBINATION_COLUMNS):
-        assert group["edge_id"].to_list() == components["edge_id"].to_list()
+        assert group["edge_id"].to_list() == components.index.to_list()
 
 
 def _combination(grid: pd.DataFrame, **choices) -> pd.DataFrame:
@@ -73,13 +72,13 @@ def test_grid_known_score(grid, components):
 
 
 def test_summary_one_row_per_link(grid, components):
-    summary = summarize_ranks(grid)
-    assert summary["edge_id"].to_list() == sorted(components["edge_id"])
+    summary = summarize_ranks(grid, "edge_id")
+    assert summary["edge_id"].to_list() == sorted(components.index)
 
 
 def test_rank_correlations_shape_and_diagonal(grid):
     """One row and column per combination, and every combination correlates perfectly with itself."""
-    correlations = get_rank_correlations(grid)
+    correlations = get_rank_correlations(grid, "edge_id")
     assert correlations.shape == (N_COMBINATIONS, N_COMBINATIONS)
     np.testing.assert_allclose(np.diag(correlations.to_numpy()), 1)
 
@@ -87,11 +86,10 @@ def test_rank_correlations_shape_and_diagonal(grid):
 def test_grid_near_tied_scores_share_rank():
     """Scores that are equal up to float rounding share a rank."""
     components = pd.DataFrame({ # 0.5 * (0.1 + 0.2) and 0.5 * 0.3 differ only by float rounding
-        "edge_id": [1, 2],
         "diversity_shannon": [0.1, 0.3],
         "poi_diversity": [0.2, 0.0],
         "attractiveness": [0.0, 0.0]
-    })
+    }, index=pd.Index([1, 2], name="edge_id"))
     bounds = {"diversity_shannon": (0, 1), "poi_diversity": (0, 1), "attractiveness": (0, 1)}
     grid = get_score_grid(
         components, ["shannon"], ["bounds"], ["mean"], [(0.5, 0.5, 0.0)], 
@@ -114,3 +112,9 @@ def test_grid_zscore_scores_span_unit_interval(components):
     grid = get_score_grid(components, ["shannon"], ["zscore"], ["mean"], [(0.5, 0.25, 0.25)], BOUNDS, P, 0.25)
     assert grid["score"].min() == 0
     assert grid["score"].max() == 1
+
+
+def test_grid_unnamed_index_error(components):
+    """Components without a named id index should raise an error."""
+    with pytest.raises(ValueError):
+        get_score_grid(components.reset_index(drop=True), MEASURES, NORMALIZATIONS, AGGREGATIONS, WEIGHTS, BOUNDS, P, 0.25)
