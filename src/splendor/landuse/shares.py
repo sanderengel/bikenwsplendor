@@ -3,7 +3,8 @@ import pandas as pd
 import geopandas as gpd
 from typing import Sequence
 from affine import Affine
-from splendor.landuse.raster import get_pixel_values
+from scipy.sparse import csr_array, eye_array
+from splendor.landuse.raster import get_pixel_matrix
 
 SHARE_PREFIX = "share_"
 
@@ -56,10 +57,114 @@ def get_shares_from_counts(
     return corridor_shares
 
 
+def get_shares_array(shares: pd.DataFrame | pd.Series) -> np.ndarray:
+    """Return array of only share columns, stripping identifiers and aggregate columns."""
+    return shares.filter(regex=f"^{SHARE_PREFIX}").to_numpy()
+
+
+def _get_type_matrix(values: np.ndarray, n_types: int) -> csr_array:
+    """One-hot pixel x type matrix, with column 0 for no data."""
+    n = len(values)
+    return csr_array(
+        (np.ones(n, dtype=np.int64), values.astype(np.int64), np.arange(n + 1)),
+        shape=(n, n_types + 1)
+    )
+
+
+def _prepare_unit_matrices(
+    buffers: csr_array,
+    raster: np.ndarray,
+    n_types: int,
+    strips: csr_array | None,
+    strip_excluded_type: int | None,
+) -> tuple[csr_array, csr_array, csr_array]:
+    """
+    Restrict the link x pixel matrices to the pixels in some buffer, and return the buffers,
+    the pixels of 'strip_excluded_type' in each link's strip (within its own buffer),
+    and a one-hot pixel x type matrix. Without strips, no pixels are excluded.
+    """
+    used = np.unique(buffers.indices)
+    values = raster.ravel()[used]
+    used_buffers = buffers[:, used].tocsr()
+
+    if strips is None:
+        strip_excluded = csr_array(used_buffers.shape, dtype=np.int8)
+    else:
+        strip_excluded = strips[:, used].multiply(used_buffers).tocsr() # Each link's strip within its own buffer
+        strip_excluded.data = strip_excluded.data * (values[strip_excluded.indices] == strip_excluded_type)
+        strip_excluded.eliminate_zeros()
+
+    return used_buffers, strip_excluded, _get_type_matrix(values, n_types)
+
+
+def _count_unit_pixels(
+    membership: csr_array,
+    buffers: csr_array,
+    strip_excluded: csr_array,
+    pixel_types: csr_array,
+    chunk_size: int,
+) -> np.ndarray:
+    """
+    Return unit x type pixel counts of the union of each unit's link buffers,
+    minus the union of its links' excluded strip pixels.
+    """
+    n_units = membership.shape[0]
+    counts = np.zeros((n_units, pixel_types.shape[1]), dtype=np.int64)
+    for start in range(0, n_units, chunk_size):
+        stop = min(start + chunk_size, n_units)
+        units = membership[start:stop].astype(np.int32) # int32 so the products can't overflow
+        in_buffers = (units @ buffers) > 0              # Union of the units' link buffers
+        in_excluded = (units @ strip_excluded) > 0      # Union of the units' excluded strip pixels
+        kept = in_buffers.astype(np.int64) - in_excluded.astype(np.int64) # Excluded pixels lie inside the buffers
+        counts[start:stop] = (kept @ pixel_types).toarray()
+    return counts
+
+
+def get_unit_shares(
+    membership: csr_array,
+    index: pd.Index,
+    buffers: csr_array,
+    raster: np.ndarray,
+    n_types: int,
+    strips: csr_array | None = None,
+    strip_excluded_type: int | None = None,
+    excluded_types: Sequence[int] = (),
+    chunk_size: int = 500,
+) -> pd.DataFrame:
+    """
+    Return the pixel value shares of units made of links, given as a unit x link 'membership' matrix
+    (the identity for links themselves, or the loop x link incidence matrix for loops).
+
+    A unit's corridor is the union of its links' buffer pixels. With 'strips', the pixels of
+    'strip_excluded_type' in the union of its links' strips (each within its own buffer) are left out.
+    Each pixel counts once, so the result doesn't depend on how a unit is split into links.
+    Treat types in 'excluded_types' as no data by leaving them out of the shares,
+    though their pixels are counted in the column 'n_excluded'.
+
+    'buffers' and 'strips' are link x pixel matrices (columns flat raster pixel ids), see get_pixel_matrix.
+    """
+    excluded_types = check_excluded_types(excluded_types, n_types)
+    if len(index) != membership.shape[0]:
+        raise ValueError("index must have one entry per unit")
+    if buffers.shape != (membership.shape[1], raster.size):
+        raise ValueError("buffers must have one row per link and one column per raster pixel")
+    if strips is not None:
+        if strip_excluded_type is None:
+            raise ValueError("strips given without a type to exclude")
+        if strips.shape != buffers.shape:
+            raise ValueError("strips must have the same shape as the buffers")
+
+    buffers, strip_excluded, pixel_types = _prepare_unit_matrices(
+        buffers, raster, n_types, strips, strip_excluded_type
+    )
+    counts = _count_unit_pixels(membership, buffers, strip_excluded, pixel_types, chunk_size)
+    return get_shares_from_counts(counts, index, excluded_types)
+
+
 def get_corridor_shares(
     corridors: gpd.GeoSeries,
     raster: np.ndarray,
-    transform: Affine, 
+    transform: Affine,
     n_types: int,
     strips: gpd.GeoSeries | None = None,
     strip_excluded_type: int | None = None,
@@ -67,34 +172,18 @@ def get_corridor_shares(
 ) -> pd.DataFrame:
     """
     Return the pixel value shares for each corridor from the raster data.
+    With 'strips', the pixels of 'strip_excluded_type' inside a corridor's strip are left out.
     Treat types in 'excluded_types' as no data by leaving them out of the shares,
     though their pixels are counted in the column 'n_excluded'.
     """
-    excluded_types = check_excluded_types(excluded_types, n_types)
-    if strips is not None:
-        if strip_excluded_type is None:
-            raise ValueError("strips given without a type to exclude")
-        if not strips.index.equals(corridors.index):
-            raise ValueError("strips must have the same index as the corridors")
+    if strips is not None and not strips.index.equals(corridors.index):
+        raise ValueError("strips must have the same index as the corridors")
 
-    # Initialize counts, +1 type so column 0 represents no data
-    counts = np.zeros((len(corridors), n_types + 1), dtype=np.int64)
+    corridor_pixels = get_pixel_matrix(corridors, raster.shape, transform)
+    strip_pixels = None if strips is None else get_pixel_matrix(strips, raster.shape, transform)
+    membership = eye_array(len(corridors), dtype=np.int8, format="csr") # Each corridor is its own unit
 
-    for i, corridor in enumerate(corridors):
-        if strips is None:
-            values = get_pixel_values(corridor, raster, transform)
-        else:
-            strip = strips.iloc[i]
-            # Split the corridor into the part outside and inside the strip
-            rest_values = get_pixel_values(corridor.difference(strip), raster, transform)
-            strip_values = get_pixel_values(corridor.intersection(strip), raster, transform)
-            strip_values = strip_values[strip_values != strip_excluded_type]
-            values = np.concatenate([rest_values, strip_values])
-        counts[i] = np.bincount(values, minlength=n_types + 1)
-
-    return get_shares_from_counts(counts, corridors.index, excluded_types)
-
-
-def get_shares_array(shares: pd.DataFrame | pd.Series) -> np.ndarray:
-    """Return array of only share columns, stripping identifiers and aggregate columns."""
-    return shares.filter(regex=f"^{SHARE_PREFIX}").to_numpy()
+    return get_unit_shares(
+        membership, corridors.index, corridor_pixels, raster, n_types,
+        strips=strip_pixels, strip_excluded_type=strip_excluded_type, excluded_types=excluded_types
+    )
