@@ -64,6 +64,9 @@ def link_landuse_path(area: str, r: float, r_s: float) -> Path:
 def link_components_path(area: str, r: float, r_s: float) -> Path:
     return PROCESSED / area / f"link_components_r{r}_rs{r_s}.csv"
 
+def loop_landuse_path(area, str, max_nodes: int, max_length_m: int, r: float, r_s: float) -> Path:
+    return PROCESSED / area / f"loop_landuse_{max_nodes}_{max_length_m}_r{r}_rs{r_s}"
+ 
 
 # Link score
 def link_score_grid_path(area: str, r: float, r_s: float) -> Path:
