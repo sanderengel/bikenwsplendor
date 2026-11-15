@@ -20,6 +20,8 @@ class LoopData:
         ptr: list,
         n_network_nodes: int,
         n_network_edges: int,
+        max_nodes: int,
+        max_length_m: float
     ) -> None:
         self.nodes = np.array(nodes, dtype=np.int32)
         self.edges = np.array(edges, dtype=np.int32)
@@ -29,6 +31,10 @@ class LoopData:
         self.n_loops = len(ptr) - 1
         self.n_network_nodes = n_network_nodes
         self.n_network_edges = n_network_edges
+
+        # Census bounds the loops were generated with
+        self.max_nodes = max_nodes
+        self.max_length_m = max_length_m
 
         # Number of nodes for loop i is ptr[i+1] - ptr[i]
         self.sizes = np.diff(self.ptr)
@@ -60,22 +66,38 @@ class LoopData:
             edges=self.edges,
             lengths_m=self.lengths_m,
             ptr=self.ptr,
-            n_network_nodes=self.n_network_nodes, # Stored as 0-d array
-            n_network_edges=self.n_network_edges, # Stored as 0-d array
+            # Scalars, each stored as 0-d array
+            n_network_nodes=self.n_network_nodes,
+            n_network_edges=self.n_network_edges,
+            max_nodes=self.max_nodes,
+            max_length_m=self.max_length_m
         )
 
     @classmethod
-    def load(cls, path: str | Path) -> Self:
+    def load(
+        cls,
+        path: str | Path,
+        max_nodes: int = LOOP_NUMNODE_BOUND,
+        max_length_m: float = LOOP_LENGTH_BOUND
+    ) -> Self:
         """Load loop data saved with LoopData.save."""
         with np.load(path) as d:
-            return cls(
+            loops = cls(
                 nodes=d["nodes"],
                 edges=d["edges"],
                 lengths_m=d["lengths_m"],
                 ptr=d["ptr"],
                 n_network_nodes=int(d["n_network_nodes"]), # Convert back from 0-d array
                 n_network_edges=int(d["n_network_edges"]), # Convert back from 0-d array
+                max_nodes=int(d["max_nodes"]),
+                max_length_m=float(d["max_length_m"]),
             )
+        if (loops.max_nodes, loops.max_length_m) != (max_nodes, max_length_m):
+            raise ValueError(
+                f"census bounds ({loops.max_nodes}, {loops.max_length_m}) differ from the expected "
+                f"({max_nodes}, {max_length_m}); regenerate the census"
+            )
+        return loops
 
 
 def build_graph(nodes: gpd.GeoDataFrame, edges: gpd.GeoDataFrame) -> nx.Graph:
@@ -131,5 +153,7 @@ def get_loops(
         lengths_m=loop_lengths_m,
         ptr=loop_ptr,
         n_network_nodes=G.number_of_nodes(), # Take from G to include nodes not in any loops
-        n_network_edges=G.number_of_edges()  # Take from G to include edges not in any loops
+        n_network_edges=G.number_of_edges(), # Take from G to include edges not in any loops
+        max_nodes=max_nodes,
+        max_length_m=max_length_m,
     )
