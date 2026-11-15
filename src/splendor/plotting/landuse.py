@@ -79,25 +79,37 @@ def plot_landuse_map(
     line: Geometry,
     corridor: Geometry,
     margin: float = .15,
+    min_corridor_fraction: float = .02,
 ) -> None:
-    """Plot land use around one link on the given ax."""
+    """
+    Plot land use around one link or loop on the given ax. The corridor is shown (dimmed outside, dashed outline)
+    only if its width is at least 'min_corridor_fraction' of the map's side; otherwise only the line is drawn.
+    """
     _, cmap, norm = _landuse_colormap()
 
     # Square raster window around the corridor, shifted inward at the raster edge
     raster_bounds = array_bounds(*raster.shape, transform) # (west, south, east, north)
     map_extent = _fit_extent(get_map_extent(corridor, margin), raster_bounds)
     map_left, map_bottom, map_right, map_top = map_extent
+
     window = get_bounds_window(map_extent, transform, raster.shape, clip=True)
     left, bottom, right, top = windows.bounds(window, transform)
+    
     ax.imshow(
         raster[window.toslices()], cmap=cmap, norm=norm, 
         extent=(left, right, bottom, top), interpolation="nearest"
     )
 
-    # Dim everything outside the corridor
-    outside = box(*map_extent).difference(corridor)
+    outside = box(*map_extent)
+
+    # Show corridor only if the corridor is wide enough to read
+    corridor_width = corridor.area / line.length # About 2r
+    if corridor_width / (map_right - map_left) >= min_corridor_fraction:
+        gpd.GeoSeries([corridor]).boundary.plot(ax=ax, color="black", linewidth=.6, linestyle="--")
+        # Dim everything outside the corridor
+        outside = outside.difference(corridor)
+
     gpd.GeoSeries([outside]).plot(ax=ax, color="white", alpha=.65, linewidth=0)
-    gpd.GeoSeries([corridor]).boundary.plot(ax=ax, color="black", linewidth=.6, linestyle="--")
     gpd.GeoSeries([line]).plot(ax=ax, color="black", linewidth=1.5)
 
     ax.set_xlim(map_left, map_right)
@@ -158,6 +170,7 @@ def plot_landuse_grid(
     row_height: float = 3.9,
     title_height: float = .3,
     legend_height: float = .3,
+    min_corridor_fraction: float = .02
 ) -> Figure:
     """
     Grid of panels, one per unit (link or loop): land use map with corridor, and a 100% bar of its shares
@@ -181,7 +194,7 @@ def plot_landuse_grid(
         ax_map = subfig.subplots()
         ax_bar = ax_map.inset_axes([0, -(bar_gap + bar_height), 1, bar_height]) # Below the map, same width
 
-        plot_landuse_map(ax_map, raster, transform, line, corridors.loc[unit_id], margin)
+        plot_landuse_map(ax_map, raster, transform, line, corridors.loc[unit_id], margin, min_corridor_fraction)
         panel_title = _panel_title(
             unit,
             unit_id,
