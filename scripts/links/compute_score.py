@@ -35,14 +35,14 @@ from splendor.composite.sensitivity import get_score_grid, summarize_ranks, get_
 STUDY_AREA = get_study_area()
 LEVEL = "links"
 PATH_ARGS = (STUDY_AREA, LEVEL, CORRIDOR_RADIUS, ROAD_STRIP_RADIUS)
+ID_COLUMN = "edge_id"
 
 # Components are land use diversity per measure and attractiveness, plus POI diversity from the network
 _, edges = load_network(network_path(STUDY_AREA))
-components = pd.read_csv(components_path(*PATH_ARGS))
+components = pd.read_csv(components_path(*PATH_ARGS), index_col=ID_COLUMN)
 
-score_components = components.merge(
-    edges[["edge_id", "poi_diversity"]], on="edge_id", how="inner", validate="one_to_one"
-)
+score_components = components.join(edges.set_index(ID_COLUMN)["poi_diversity"], how="inner")
+assert components.index.is_unique
 assert len(score_components) == len(edges) == len(components), "edge ids of network and components file don't match"
 
 # Each component's theoretical bounds
@@ -66,16 +66,16 @@ grid = get_score_grid(
 # Rank summary over the combined scores only, but correlations over all combinations
 weight_columns = ["land_use_weight", "poi_weight", "attractiveness_weight"]
 is_combined = pd.MultiIndex.from_frame(grid[weight_columns]).isin(COMPONENT_WEIGHTS)
-summary = summarize_ranks(grid[is_combined])
-correlations = get_rank_correlations(grid)
+summary = summarize_ranks(grid[is_combined], ID_COLUMN)
+correlations = get_rank_correlations(grid, ID_COLUMN)
 
 # Filter to main specification to get final splendor scores
 splendor = grid.copy()
 for column, choice in MAIN_SPECIFICATION.items():
     splendor = splendor[splendor[column] == choice]
-splendor = splendor[["edge_id", "score", "rank"]]
-assert splendor["edge_id"].is_unique
-assert set(splendor["edge_id"]) == set(edges["edge_id"]), "main specification must match exactly one combination in the grid"
+splendor = splendor[[ID_COLUMN, "score", "rank"]]
+assert splendor[ID_COLUMN].is_unique
+assert set(splendor[ID_COLUMN]) == set(edges[ID_COLUMN]), "main specification must match exactly one combination in the grid"
 
 grid.to_csv(ensure_parent(score_grid_path(*PATH_ARGS)), index=False)
 summary.to_csv(ensure_parent(rank_summary_path(*PATH_ARGS)), index=False)
