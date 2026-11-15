@@ -7,7 +7,7 @@ MAIN_TYPES = {
     105: (5, "Heathland and shrub", "Heathland", (150, 90, 160)),
     106: (6, "Sparsely vegetated", "Sparse veg.", (200, 200, 190)),
     107: (7, "Mires, fens and bogs", "Mires", (120, 170, 160)),
-    108: (8, "Rivers", "Rivers", (60, 120, 220)),
+    108: (8, "Rivers", "Rivers", (0, 160, 190)),
     109: (9, "Lakes", "Lakes", (60, 120, 220)),
     110: (10, "Lagoons and tidal flats", "Lagoons", (120, 190, 230)),
     111: (11, "Coast (dunes, beaches, saltmarsh)", "Coast", (240, 200, 160)),
