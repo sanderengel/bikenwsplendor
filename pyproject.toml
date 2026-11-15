@@ -22,16 +22,27 @@ splendor = { path = ".", editable = true }
 [tool.pixi.tasks]
 lab = "jupyter lab"
 test = "pytest"
-pipeline = """
-pytest
-&& python scripts/export_network.py
-&& python scripts/generate_loops.py
-&& python scripts/validate_loops.py
-&& python scripts/clip_basemap.py
-&& python scripts/compute_link_landuse.py
-&& python scripts/compute_link_components.py
-&& python scripts/compute_link_score.py
-"""
+
+# Common inputs
+export-network = { cmd = "python scripts/common/export_network.py", depends-on = ["test"] }
+clip-basemap = { cmd = "python scripts/common/clip_basemap.py", depends-on = ["export-network"] }
+
+# Loop census
+generate-loops = { cmd = "python scripts/loops/census/generate.py", depends-on = ["export-network"] }
+validate-loops = { cmd = "python scripts/loops/census/validate.py", depends-on = ["generate-loops"] }
+
+# Links
+link-landuse = { cmd = "python scripts/links/compute_landuse.py", depends-on = ["clip-basemap"] }
+link-components = { cmd = "python scripts/links/compute_components.py", depends-on = ["link-landuse"] }
+link-score = { cmd = "python scripts/links/compute_score.py", depends-on = ["link-components"] }
+
+# Loops
+loop-landuse = { cmd = "python scripts/loops/compute_landuse.py", depends-on = ["validate-loops", "clip-basemap"] }
+
+# Pipelines
+links = { depends-on = ["link-score"] }
+loops = { depends-on = ["loop-landuse"] }
+full = { depends-on = ["links", "loops"] }
 
 [tool.pixi.activation.env]
 PYTHONPATH = "$PIXI_PROJECT_ROOT/src"
