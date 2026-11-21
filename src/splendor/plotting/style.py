@@ -15,3 +15,8 @@ def sequential_cmap(name: str = "inferno", start: float = 0.0, end: float = .85,
     """Single-hue sequential colormap."""
     colors = plt.get_cmap(name)(np.linspace(start, end, 256))
     return ListedColormap(colors[::-1] if reverse else colors)
+
+
+def set_math_font() -> None:
+    """Render math in figures with Computer Modern."""
+    plt.rcParams["mathtext.fontset"] = "cm"
