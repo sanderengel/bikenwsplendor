@@ -16,6 +16,7 @@ from typing import Sequence
 from splendor.landuse.types import ALL_TYPES, N_TYPES, SHORT_NAMES
 from splendor.landuse.raster import get_bounds_window
 from splendor.landuse.shares import get_share_column_name
+from splendor.landuse.corridors import get_link_corridor
 
 
 def _landuse_colormap() -> tuple[list[tuple[float, ...]], ListedColormap, BoundaryNorm]:
@@ -230,3 +231,22 @@ def plot_link_landuse_grid(
         edge_ids, edges.geometry.set_axis(ids), corridors.set_axis(ids),
         shares, raster, transform, unit="Link", **kwargs
     )
+
+
+def plot_buffer_and_corridor(
+    line: Geometry,
+    r: float,
+    raster: np.ndarray,
+    transform: Affine,
+    panel_size: float = 3.4,
+    margin: float = .15,
+) -> Figure:
+    """Land use map of one link with its uncut buffer (left) and its corridor with end cuts (right)."""
+    fig, axes = plt.subplots(
+        1, 2, figsize=(2 * panel_size, panel_size), layout="constrained"
+    )
+    plot_landuse_map(axes[0], raster, transform, line, line.buffer(r), margin)
+    plot_landuse_map(axes[1], raster, transform, line, get_link_corridor(line, r), margin)
+    axes[0].set_title(r"Buffer $B(e)$", fontsize=10)
+    axes[1].set_title(r"Corridor $C(e)$", fontsize=10)
+    return fig
