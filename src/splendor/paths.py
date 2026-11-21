@@ -13,8 +13,8 @@ def ensure_parent(path: str | Path) -> Path:
 REFS_DIR = Path.home() / "dev/refs/"
 BIKENWLOOPS_DIR = REFS_DIR / "bikenwloops"
 
-def bikenwloops_network_path(area: str) -> Path:
-    return BIKENWLOOPS_DIR / "data/processed" / area / "network_preprocessed.xz"
+def bikenwloops_network_path(area: str, suffix: str = "") -> Path:
+    return BIKENWLOOPS_DIR / "data/processed" / area / f"network_preprocessed{suffix}.xz"
 
 def bikenwloops_loopcensus_path(area: str, max_nodes: int, max_length_m: int) -> Path:
     return BIKENWLOOPS_DIR / "data/processed" / area / f"loopcensus_{max_nodes}_maxlength{max_length_m}.pkl"
