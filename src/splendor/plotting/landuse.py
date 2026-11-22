@@ -185,13 +185,15 @@ def plot_landuse_grid(
     below it. One legend for all panels lists the land use types present.
     """
     n_rows = -(-len(ids) // n_cols)
+    has_title = title is not None
+    heights = ([title_height] if has_title else []) + [row_height * n_rows, legend_height]
     fig = plt.figure(
-        figsize=(col_width * n_cols, title_height + row_height * n_rows + legend_height),
+        figsize=(col_width * n_cols, sum(heights)),
         layout="constrained",
     )
-    title_fig, grid_fig, legend_fig = fig.subfigures(
-        3, 1, height_ratios=[title_height, row_height * n_rows, legend_height]
-    )
+    subfigures = fig.subfigures(len(heights), 1, height_ratios=heights)
+    title_fig = subfigures[0] if has_title else None
+    grid_fig, legend_fig = subfigures[-2:]
     subfigs = grid_fig.subfigures(n_rows, n_cols, wspace=.03, hspace=0, squeeze=False)
 
     present = set()
@@ -219,7 +221,7 @@ def plot_landuse_grid(
         present |= set(_present_shares(row).index)
 
     _add_landuse_legend(legend_fig, sorted(present))
-    if title:
+    if has_title:
         title_fig.suptitle(title, fontsize=14)
     return fig
 
