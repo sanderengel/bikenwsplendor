@@ -37,14 +37,20 @@ def _panel_title(
     n_pixels: int,
     rank: int | None = None,
     score: float | None = None,
-    detail: str | None = None
+    detail: str | None = None,
+    symbol: str | None = None,
 ) -> str:
     """
     Panel title: "Unit id (length, pixels)" on one line, or with a rank, score or detail
     "#rank: Unit id (score s)" and "length, pixels[, detail]" on two lines.
+    With a symbol (e.g. "e" or "L"), length and pixels are written in notation: \ell(symbol) and |K(symbol)|.
     """
-    parts = [f"{length_km:.1f} km", f"{n_pixels:,} pixels"] + ([detail] if detail else [])
-    details_text = f"{', '.join(parts)}"
+    if symbol:
+        parts = [rf"$\ell({symbol})$ = {length_km:.1f} km", rf"$|K({symbol})|$ = {n_pixels:,}"]
+    else:
+        parts = [f"{length_km:.1f} km", f"{n_pixels:,} pixels"]
+    parts += [detail] if detail else []
+    details_text = ", ".join(parts)
     if rank is None and score is None and detail is None:
         return f"{unit} {unit_id} ({details_text})"
     first = f"#{rank}: {unit} {unit_id}" if rank is not None else f"{unit} {unit_id}"
@@ -171,7 +177,8 @@ def plot_landuse_grid(
     row_height: float = 3.9,
     title_height: float = .3,
     legend_height: float = .3,
-    min_corridor_fraction: float = .02
+    min_corridor_fraction: float = .02,
+    symbol: str | None = None # Notation for length and pixels in panel titles, e.g. "e" or "L"
 ) -> Figure:
     """
     Grid of panels, one per unit (link or loop): land use map with corridor, and a 100% bar of its shares
@@ -203,7 +210,8 @@ def plot_landuse_grid(
             int(row["n_pixels"]),
             rank=int(ranks[unit_id]) if ranks is not None else None,
             score=float(scores[unit_id]) if scores is not None else None,
-            detail=details[unit_id] if details is not None else None
+            detail=details[unit_id] if details is not None else None,
+            symbol=symbol
         )
         ax_map.set_title(panel_title, fontsize=10, loc="left")
 
