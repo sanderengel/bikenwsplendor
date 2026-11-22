@@ -150,11 +150,11 @@ def plot_share_bar(ax: Axes, row: pd.Series) -> None:
     ax.set_axis_off()
 
 
-def _add_landuse_legend(fig: Figure, type_ids: Sequence[int]) -> None:
+def _add_landuse_legend(fig: Figure, type_ids: Sequence[int], fontsize: float = 9.0) -> None:
     """One row of color patches for the given land use types."""
     colors, _, _ = _landuse_colormap()
     handles = [Patch(color=colors[k], label=SHORT_NAMES[k]) for k in type_ids]
-    fig.legend(handles=handles, loc="center", ncol=len(handles), frameon=False, fontsize=9)
+    fig.legend(handles=handles, loc="center", ncol=len(handles), frameon=False, fontsize=fontsize)
 
 
 def plot_landuse_grid(
@@ -178,7 +178,8 @@ def plot_landuse_grid(
     title_height: float = .3,
     legend_height: float = .3,
     min_corridor_fraction: float = .02,
-    symbol: str | None = None # Notation for length and pixels in panel titles, e.g. "e" or "L"
+    symbol: str | None = None, # Notation for length and pixels in panel titles, e.g. "e" or "L",
+    fontsize: float = 10 # Panel titles, the legend is one point smaller
 ) -> Figure:
     """
     Grid of panels, one per unit (link or loop): land use map with corridor, and a 100% bar of its shares
@@ -215,12 +216,12 @@ def plot_landuse_grid(
             detail=details[unit_id] if details is not None else None,
             symbol=symbol
         )
-        ax_map.set_title(panel_title, fontsize=10, loc="left")
+        ax_map.set_title(panel_title, fontsize=fontsize, loc="left")
 
         plot_share_bar(ax_bar, row)
         present |= set(_present_shares(row).index)
 
-    _add_landuse_legend(legend_fig, sorted(present))
+    _add_landuse_legend(legend_fig, sorted(present), fontsize=fontsize - 1)
     if has_title:
         title_fig.suptitle(title, fontsize=14)
     return fig
