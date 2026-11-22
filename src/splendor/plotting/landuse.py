@@ -251,6 +251,7 @@ def plot_buffer_and_corridor(
     transform: Affine,
     panel_size: float = 3.4,
     margin: float = .15,
+    fontsize: float = 10
 ) -> Figure:
     """Land use map of one link with its uncut buffer (left) and its corridor with end cuts (right)."""
     fig, axes = plt.subplots(
@@ -258,6 +259,6 @@ def plot_buffer_and_corridor(
     )
     plot_landuse_map(axes[0], raster, transform, line, line.buffer(r), margin)
     plot_landuse_map(axes[1], raster, transform, line, get_link_corridor(line, r), margin)
-    axes[0].set_title(r"Buffer $B(e)$", fontsize=10)
-    axes[1].set_title(r"Corridor $C(e)$", fontsize=10)
+    axes[0].set_title(r"Buffer $B(e)$", fontsize=fontsize)
+    axes[1].set_title(r"Corridor $C(e)$", fontsize=fontsize)
     return fig
