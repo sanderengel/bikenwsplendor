@@ -46,7 +46,7 @@ def _panel_title(
     With a symbol (e.g. "e" or "L"), length and pixels are written in notation: \ell(symbol) and |K(symbol)|.
     """
     if symbol:
-        parts = [rf"$\ell({symbol})$ = {length_km:.1f} km", rf"$|K({symbol})|$ = {n_pixels:,}"]
+            parts = [rf"$\ell({symbol})$ = {length_km:.1f} km", rf"$|\mathcal{{K}}({symbol})|$ = {n_pixels:,}"]
     else:
         parts = [f"{length_km:.1f} km", f"{n_pixels:,} pixels"]
     parts += [detail] if detail else []
@@ -259,6 +259,6 @@ def plot_buffer_and_corridor(
     )
     plot_landuse_map(axes[0], raster, transform, line, line.buffer(r), margin)
     plot_landuse_map(axes[1], raster, transform, line, get_link_corridor(line, r), margin)
-    axes[0].set_title(r"Buffer $B(e)$", fontsize=fontsize)
-    axes[1].set_title(r"Corridor $C(e)$", fontsize=fontsize)
+    axes[0].set_title(r"Buffer $\mathcal{B}(e)$", fontsize=fontsize)
+    axes[1].set_title(r"Corridor $\mathcal{C}(e)$", fontsize=fontsize)
     return fig
