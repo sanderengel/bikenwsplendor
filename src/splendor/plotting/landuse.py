@@ -35,28 +35,22 @@ def _panel_title(
     unit_id: int,
     length_km: float,
     n_pixels: int,
-    rank: int | None = None,
-    score: float | None = None,
     detail: str | None = None,
     symbol: str | None = None,
+    show_pixels: bool = True,
 ) -> str:
     """
-    Panel title: "Unit id (length, pixels)" on one line, or with a rank, score or detail
-    "#rank: Unit id (score s)" and "length, pixels[, detail]" on two lines.
+    Panel title: "Unit id (length[, pixels])", with an optional detail line below.
     With a symbol (e.g. "e" or "L"), length and pixels are written in notation: \ell(symbol) and |K(symbol)|.
     """
     if symbol:
-            parts = [rf"$\ell({symbol})$ = {length_km:.1f} km", rf"$|\mathcal{{K}}({symbol})|$ = {n_pixels:,}"]
+        sizes = [rf"$\ell({symbol})$ = {length_km:.1f} km", rf"$|\mathcal{{K}}({symbol})|$ = {n_pixels:,}"]
     else:
-        parts = [f"{length_km:.1f} km", f"{n_pixels:,} pixels"]
-    parts += [detail] if detail else []
-    details_text = ", ".join(parts)
-    if rank is None and score is None and detail is None:
-        return f"{unit} {unit_id} ({details_text})"
-    first = f"#{rank}: {unit} {unit_id}" if rank is not None else f"{unit} {unit_id}"
-    if score is not None:
-        first += f" (score {score:.2f})"
-    return f"{first}\n{details_text}"
+        sizes = [f"{length_km:.1f} km", f"{n_pixels:,} pixels"]
+    if not show_pixels:
+        sizes = sizes[:1]
+    first = f"{unit} {unit_id} ({', '.join(sizes)})"
+    return f"{first}\n{detail}" if detail else first
 
 
 def _fit_extent(
@@ -150,11 +144,11 @@ def plot_share_bar(ax: Axes, row: pd.Series) -> None:
     ax.set_axis_off()
 
 
-def _add_landuse_legend(fig: Figure, type_ids: Sequence[int], fontsize: float = 9.0) -> None:
+def _add_landuse_legend(fig, type_ids, ncol: int, fontsize: float = 9) -> None:
     """One row of color patches for the given land use types."""
     colors, _, _ = _landuse_colormap()
     handles = [Patch(color=colors[k], label=SHORT_NAMES[k]) for k in type_ids]
-    fig.legend(handles=handles, loc="center", ncol=len(handles), frameon=False, fontsize=fontsize)
+    fig.legend(handles=handles, loc="center", ncol=ncol, frameon=False, fontsize=fontsize)
 
 
 def plot_landuse_grid(
@@ -164,8 +158,6 @@ def plot_landuse_grid(
     shares: pd.DataFrame,     # Indexed by id
     raster: np.ndarray,
     transform: Affine,
-    ranks: pd.Series | None = None,   # Indexed by id
-    scores: pd.Series | None = None,  # Indexed by id
     details: pd.Series | None = None, # Indexed by id
     unit: str = "Link",
     n_cols: int = 4,
@@ -174,12 +166,14 @@ def plot_landuse_grid(
     bar_height: float = .06, # Fraction of the map's height
     bar_gap: float = .02,    # Fraction of the map's height
     col_width: float = 3.4,
-    row_height: float = 3.9,
+    row_height: float = 3.73, # Map and bar only; title lines are added below
     title_height: float = .3,
-    legend_height: float = .3,
+    legend_height: float = .3, # Per legend row
+    max_legend_cols: int = 8,
     min_corridor_fraction: float = .02,
-    symbol: str | None = None, # Notation for length and pixels in panel titles, e.g. "e" or "L",
-    fontsize: float = 10 # Panel titles, the legend is one point smaller
+    symbol: str | None = None, # Notation for length and pixels in panel titles, e.g. "e" or "L"
+    fontsize: float = 10, # Panel titles, the legend is one point smaller,
+    show_pixels: bool = True # Pixel count in panel titles
 ) -> Figure:
     """
     Grid of panels, one per unit (link or loop): land use map with corridor, and a 100% bar of its shares
@@ -187,7 +181,16 @@ def plot_landuse_grid(
     """
     n_rows = -(-len(ids) // n_cols)
     has_title = title is not None
-    heights = ([title_height] if has_title else []) + [row_height * n_rows, legend_height]
+
+    # Rows grow by one line height per title line, so the square maps keep their size at any font size
+    n_title_lines = 1 + (max((details[int(i)].count("\n") + 1 for i in ids), default=0) if details is not None else 0)
+    row_height += n_title_lines * fontsize * 1.2 / 72 # Points to inches
+
+    # Land use types present in any panel, known before the layout so the legend gets the rows it needs
+    present = sorted(set().union(*(_present_shares(shares.loc[int(i)]).index for i in ids)))
+    legend_rows = 1 if len(present) <= max_legend_cols else 2
+
+    heights = ([title_height] if has_title else []) + [row_height * n_rows, legend_height * legend_rows]
     fig = plt.figure(
         figsize=(col_width * n_cols, sum(heights)),
         layout="constrained",
@@ -197,7 +200,6 @@ def plot_landuse_grid(
     grid_fig, legend_fig = subfigures[-2:]
     subfigs = grid_fig.subfigures(n_rows, n_cols, wspace=.03, hspace=0, squeeze=False)
 
-    present = set()
     for subfig, unit_id in zip(subfigs.flat, ids):
         unit_id = int(unit_id)
         line = lines.loc[unit_id]
@@ -211,17 +213,14 @@ def plot_landuse_grid(
             unit_id,
             line.length / 1000, # m to km
             int(row["n_pixels"]),
-            rank=int(ranks[unit_id]) if ranks is not None else None,
-            score=float(scores[unit_id]) if scores is not None else None,
             detail=details[unit_id] if details is not None else None,
-            symbol=symbol
+            symbol=symbol,
+            show_pixels=show_pixels
         )
         ax_map.set_title(panel_title, fontsize=fontsize, loc="left")
-
         plot_share_bar(ax_bar, row)
-        present |= set(_present_shares(row).index)
 
-    _add_landuse_legend(legend_fig, sorted(present), fontsize=fontsize - 1)
+    _add_landuse_legend(legend_fig, present, ncol=-(-len(present) // legend_rows), fontsize=fontsize - 1)
     if has_title:
         title_fig.suptitle(title, fontsize=14)
     return fig
