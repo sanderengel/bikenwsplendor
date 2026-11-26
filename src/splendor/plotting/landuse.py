@@ -144,11 +144,14 @@ def plot_share_bar(ax: Axes, row: pd.Series) -> None:
     ax.set_axis_off()
 
 
-def _add_landuse_legend(fig, type_ids, ncol: int, fontsize: float = 9) -> None:
+def _add_landuse_legend(fig, type_ids, ncol: int, fontsize: float = 9, y: float = .5) -> None:
     """One row of color patches for the given land use types."""
     colors, _, _ = _landuse_colormap()
     handles = [Patch(color=colors[k], label=SHORT_NAMES[k]) for k in type_ids]
-    fig.legend(handles=handles, loc="center", ncol=ncol, frameon=False, fontsize=fontsize)
+    fig.legend(
+        handles=handles, loc="center", bbox_to_anchor=(.5, y),
+        ncol=ncol, frameon=False, fontsize=fontsize,
+    )
 
 
 def plot_landuse_grid(
@@ -165,48 +168,57 @@ def plot_landuse_grid(
     margin: float = .15,
     bar_height: float = .06, # Fraction of the map's height
     bar_gap: float = .02,    # Fraction of the map's height
-    col_width: float = 3.4,
-    row_height: float = 3.73, # Map and bar only; title lines are added below
+    col_width: float = 3.4,  # Inches, map plus the gap to the next column
+    col_gap: float = .25,    # Inches between maps
+    row_gap: float = .25,    # Inches between a bar and the next row's title
+    legend_gap: float = .1,  # Inches between the last bar and the legend
     title_height: float = .3,
-    legend_height: float = .3, # Per legend row
+    legend_height: float = .3, # Inches per legend row
     max_legend_cols: int = 8,
     min_corridor_fraction: float = .02,
     symbol: str | None = None, # Notation for length and pixels in panel titles, e.g. "e" or "L"
-    fontsize: float = 10, # Panel titles, the legend is one point smaller,
-    show_pixels: bool = True # Pixel count in panel titles
+    show_pixels: bool = True,  # Pixel count in panel titles
+    fontsize: float = 10 # Panel titles, the legend is one point smaller
 ) -> Figure:
     """
     Grid of panels, one per unit (link or loop): land use map with corridor, and a 100% bar of its shares
     below it. One legend for all panels lists the land use types present.
+    Axes are placed at computed positions, so maps and bars align across panels whatever the titles contain.
     """
     n_rows = -(-len(ids) // n_cols)
-    has_title = title is not None
-
-    # Rows grow by one line height per title line, so the square maps keep their size at any font size
-    n_title_lines = 1 + (max((details[int(i)].count("\n") + 1 for i in ids), default=0) if details is not None else 0)
-    row_height += n_title_lines * fontsize * 1.2 / 72 # Points to inches
 
     # Land use types present in any panel, known before the layout so the legend gets the rows it needs
     present = sorted(set().union(*(_present_shares(shares.loc[int(i)]).index for i in ids)))
     legend_rows = 1 if len(present) <= max_legend_cols else 2
 
-    heights = ([title_height] if has_title else []) + [row_height * n_rows, legend_height * legend_rows]
-    fig = plt.figure(
-        figsize=(col_width * n_cols, sum(heights)),
-        layout="constrained",
-    )
-    subfigures = fig.subfigures(len(heights), 1, height_ratios=heights)
-    title_fig = subfigures[0] if has_title else None
-    grid_fig, legend_fig = subfigures[-2:]
-    subfigs = grid_fig.subfigures(n_rows, n_cols, wspace=.03, hspace=0, squeeze=False)
+    # Vertical sizes in inches
+    n_title_lines = 1 + (max((details[int(i)].count("\n") + 1 for i in ids), default=0) if details is not None else 0)
+    title_pad = 4 # Points between title and map
+    panel_title_h = (n_title_lines * fontsize * 1.2 + title_pad) / 72 # Points to inches
+    map_size = col_width - col_gap
+    bar_h, gap_h = bar_height * map_size, bar_gap * map_size
+    row_h = panel_title_h + map_size + gap_h + bar_h + row_gap
+    fig_title_h = title_height if title is not None else 0
+    legend_h = legend_height * legend_rows
 
-    for subfig, unit_id in zip(subfigs.flat, ids):
+    fig_w = col_width * n_cols
+    fig_h = fig_title_h + n_rows * row_h - row_gap + legend_gap + legend_h # No row gap after the last row
+    fig = plt.figure(figsize=(fig_w, fig_h))
+
+    def rect(left: float, bottom: float, width: float, height: float) -> list[float]:
+        """Inches to figure fractions."""
+        return [left / fig_w, bottom / fig_h, width / fig_w, height / fig_h]
+
+    for k, unit_id in enumerate(ids):
         unit_id = int(unit_id)
+        r, c = divmod(k, n_cols)
+        left = c * col_width + col_gap / 2
+        map_bottom = fig_h - (fig_title_h + r * row_h + panel_title_h + map_size)
+        ax_map = fig.add_axes(rect(left, map_bottom, map_size, map_size))
+        ax_bar = fig.add_axes(rect(left, map_bottom - gap_h - bar_h, map_size, bar_h))
+
         line = lines.loc[unit_id]
         row = shares.loc[unit_id]
-        ax_map = subfig.subplots()
-        ax_bar = ax_map.inset_axes([0, -(bar_gap + bar_height), 1, bar_height]) # Below the map, same width
-
         plot_landuse_map(ax_map, raster, transform, line, corridors.loc[unit_id], margin, min_corridor_fraction)
         panel_title = _panel_title(
             unit,
@@ -215,14 +227,16 @@ def plot_landuse_grid(
             int(row["n_pixels"]),
             detail=details[unit_id] if details is not None else None,
             symbol=symbol,
-            show_pixels=show_pixels
+            show_pixels=show_pixels,
         )
-        ax_map.set_title(panel_title, fontsize=fontsize, loc="left")
+        ax_map.set_title(panel_title, fontsize=fontsize, loc="left", pad=title_pad)
         plot_share_bar(ax_bar, row)
 
-    _add_landuse_legend(legend_fig, present, ncol=-(-len(present) // legend_rows), fontsize=fontsize - 1)
-    if has_title:
-        title_fig.suptitle(title, fontsize=14)
+    _add_landuse_legend(
+        fig, present, ncol=-(-len(present) // legend_rows), fontsize=fontsize - 1, y=legend_h / 2 / fig_h
+    )
+    if title is not None:
+        fig.suptitle(title, fontsize=14, y=1 - fig_title_h / 2 / fig_h, va="center")
     return fig
 
 
