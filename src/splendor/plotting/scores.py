@@ -1,14 +1,22 @@
 """Plots of scores and how sensitive they are to the methodological choices."""
+import numpy as np
 import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
+from affine import Affine
+from rasterio.transform import array_bounds
+from matplotlib.colors import ListedColormap
 from matplotlib.axes import Axes
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Colormap, Normalize
 from matplotlib.figure import Figure
 from typing import Sequence
 
+from splendor.landuse.types import MAIN_TYPES
 from splendor.plotting.style import sequential_cmap
+
+WATER_IDS = [MAIN_TYPES[code][0] for code in (108, 109, 110, 112)] # Rivers, lakes, lagoons/tidal flats, sea
+NODATA = 0
 
 
 def _add_colorbar(fig: Figure, ax: Axes, cmap: Colormap, norm: Normalize, label: str) -> None:
@@ -18,6 +26,21 @@ def _add_colorbar(fig: Figure, ax: Axes, cmap: Colormap, norm: Normalize, label:
         location="bottom", shrink=.6, aspect=30, pad=.02
     )
 
+
+def _plot_land_mask(
+    ax: Axes,
+    raster: np.ndarray,
+    transform: Affine,
+    land_color: str = "#e4e4e4",
+    water_color: str = "white"
+) -> None:
+    """Land/sea background from the land use raster. Water and no-data pixels are water, everything else is land."""
+    is_land = (raster != NODATA) & ~np.isin(raster, WATER_IDS)
+    w, s, e, n = array_bounds(*raster.shape, transform)
+    ax.imshow(
+        is_land, cmap=ListedColormap([water_color, land_color]), vmin=0, vmax=1,
+        extent=(w, e, s, n), interpolation="nearest", zorder=0
+    )
 
 def plot_link_values(
     ax: Axes,
@@ -58,7 +81,8 @@ def plot_link_maps(
     labels: Sequence[str],
     low_is_best: Sequence[bool] | None = None,
     panel_size: tuple[float, float] = (5, 5),
-    allow_missing: bool = False
+    allow_missing: bool = False,
+    background: tuple[np.ndarray, Affine] | None = None
 ) -> Figure:
     """One map per column of 'data' (which holds edge_id), side by side, each with its own colorbar."""
     low_is_best = low_is_best or [False] * len(columns)
@@ -67,6 +91,8 @@ def plot_link_maps(
         squeeze=False, layout="constrained",
     )
     for ax, column, title, label, low in zip(axes.flat, columns, titles, labels, low_is_best):
+        if background is not None:
+            _plot_land_mask(ax, *background)
         values = data.set_index("edge_id")[column]
         norm = Normalize(values.min(), values.max())
         cmap = sequential_cmap(reverse=low) # Dark = best

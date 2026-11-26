@@ -98,3 +98,6 @@ def splendor_path(area: str, level: str, r: float, r_s: float) -> Path:
 def landuse_plot_path(area: str, level: str, r: float, detail: str = "") -> Path:
     suffix = f"_landuse_{detail}_r{r}.png" if detail else f"_landuse_r{r}.png"
     return PLOTS / area / (_level_prefix(level) + suffix)
+
+def score_map_path(area: str, level: str, r: float) -> Path:
+    return PLOTS / area / f"{_level_prefix(level)}_score_map_r{r}.png"
