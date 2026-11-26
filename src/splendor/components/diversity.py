@@ -45,5 +45,7 @@ def get_bounds(measure_name: str, n_types: int, richness_min_share: float) -> tu
     if measure_name == "inverse_simpson":
         return 1.0, float(n_types)
     if measure_name == "richness":
-        return 1.0, float(min(n_types, int(1 / richness_min_share))) # At most 1 / threshold types can reach this
+        lo = 0.0 if n_types * richness_min_share > 1 else 1.0 # Else some type must reach the threshold
+        hi = float(min(n_types, int(1 / richness_min_share))) # At most 1 / threshold types can reach this
+        return lo, hi
     raise ValueError(f"Measure '{measure_name}' is not supported. Supported measures are {list(MEASURES)}")

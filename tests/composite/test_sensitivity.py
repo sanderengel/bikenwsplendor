@@ -23,7 +23,7 @@ N_COMBINATIONS = len(MEASURES) * len(NORMALIZATIONS) * len(AGGREGATIONS) * len(W
 
 BOUNDS = {
     "diversity_shannon": (0, math.log(13)),
-    "diversity_richness": (1, 10),
+    "diversity_richness": (0, 10),
     "poi_diversity": (0, 3),
     "attractiveness": (0, 1)
 }

@@ -77,7 +77,7 @@ def test_diversity_negative_shares_error():
 @pytest.mark.parametrize("measure, expected", [
     ("shannon", (0, math.log(13))),
     ("inverse_simpson", (1, 13)),
-    ("richness", (1, 10)), # At most 10 types can reach a share of 0.1
+    ("richness", (0, 10)), # At most 10 types can reach a share of 0.1
 ])
 def test_bounds(measure, expected):
     assert get_bounds(measure, 13, 0.1) == pytest.approx(expected)
