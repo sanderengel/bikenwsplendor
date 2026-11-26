@@ -43,10 +43,11 @@ def _panel_title(
     Panel title: "Unit id (length[, pixels])", with an optional detail line below.
     With a symbol (e.g. "e" or "L"), length and pixels are written in notation: \ell(symbol) and |K(symbol)|.
     """
+    length = f"{length_km * 1000:.0f} m" if length_km < 1 else f"{length_km:.1f} km"
     if symbol:
-        sizes = [rf"$\ell({symbol})$ = {length_km:.1f} km", rf"$|\mathcal{{K}}({symbol})|$ = {n_pixels:,}"]
+        sizes = [rf"$\ell({symbol})$ = {length}", rf"$|\mathcal{{K}}({symbol})|$ = {n_pixels:,}"]
     else:
-        sizes = [f"{length_km:.1f} km", f"{n_pixels:,} pixels"]
+        sizes = [f"{length}", f"{n_pixels:,} pixels"]
     if not show_pixels:
         sizes = sizes[:1]
     first = f"{unit} {unit_id} ({', '.join(sizes)})"
