@@ -175,3 +175,23 @@ def summarize_correlations(
     return pd.DataFrame({
         name: _describe(rho[mask]) for name, mask in groups.items() if mask.any() # Aggregation has one method, so no pairs
     }).T
+
+
+def summarize_interactions(
+    correlations: pd.DataFrame,
+    weights: Sequence[tuple[float, float, float]],
+    vary: str,
+    by: str,
+) -> pd.DataFrame:
+    """
+    Spearman correlations between the pairs that differ only in the choice 'vary', grouped by the value of
+    the choice 'by' they share, e.g. how much changing the weights matters under each normalization.
+    """
+    if vary == by:
+        raise ValueError("'vary' and 'by' must be different choices")
+    combos, i, rho, differs, n_differing = _correlation_pairs(correlations, weights)
+    only = differs[vary] & (n_differing == 1)
+    labels = combos.loc[i[only], CHOICE_COLUMNS[by]].apply(
+        lambda row: "/".join(f"{v:.2g}" if isinstance(v, float) else str(v) for v in row), axis=1
+    )
+    return pd.DataFrame({by: labels.to_numpy(), "rho": rho[only]}).groupby(by)["rho"].apply(_describe).unstack()
