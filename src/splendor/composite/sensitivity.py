@@ -134,13 +134,13 @@ def get_main_scores(grid: pd.DataFrame, specification: dict[str, Any], id_column
     return main.reset_index(drop=True)
 
 
-def summarize_correlations(
+def _correlation_pairs(
     correlations: pd.DataFrame,
     weights: Sequence[tuple[float, float, float]],
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, np.ndarray, np.ndarray, dict[str, np.ndarray], np.ndarray]:
     """
-    Spearman correlations between the combinations whose weights are in 'weights', summarized (count, min,
-    median, max) over all pairs, and over the pairs that differ in exactly one choice, per choice.
+    Each pair of combinations whose weights are in 'weights', once: the combinations, the index of the
+    pair's first combination, the pair's Spearman correlation, per choice whether it differs, and how many choices differ.
     """
     combos = correlations.index.to_frame(index=False)
     selected = {tuple(round(w, 6) for w in ws) for ws in weights}
@@ -148,17 +148,30 @@ def summarize_correlations(
     corr = correlations.to_numpy()[np.ix_(keep, keep)]
     combos = combos[keep].reset_index(drop=True)
 
-    i, j = np.triu_indices(len(combos), k=1) # Each pair once
-    rho = corr[i, j]
+    i, j = np.triu_indices(len(combos), k=1)
     differs = {
         choice: (combos.loc[i, columns].to_numpy() != combos.loc[j, columns].to_numpy()).any(axis=1)
         for choice, columns in CHOICE_COLUMNS.items()
     }
     n_differing = sum(d.astype(int) for d in differs.values())
+    return combos, i, corr[i, j], differs, n_differing
 
+
+def _describe(rho: pd.Series | np.ndarray) -> pd.Series:
+    return pd.Series(rho).describe()[["count", "min", "50%", "max"]].rename({"50%": "median"})
+
+
+def summarize_correlations(
+    correlations: pd.DataFrame,
+    weights: Sequence[tuple[float, float, float]],
+) -> pd.DataFrame:
+    """
+    Spearman correlations between the combinations whose weights are in 'weights', summarized over all pairs,
+    and over the pairs that differ in exactly one choice, per choice.
+    """
+    _, _, rho, differs, n_differing = _correlation_pairs(correlations, weights)
     groups = {"all pairs": np.ones(len(rho), dtype=bool)}
     groups |= {f"only {choice}": d & (n_differing == 1) for choice, d in differs.items()}
     return pd.DataFrame({
-        name: pd.Series(rho[mask]).describe()[["count", "min", "50%", "max"]]
-        for name, mask in groups.items() if mask.any() # Aggregation has one method, so no pairs
-    }).T.rename(columns={"50%": "median"})
+        name: _describe(rho[mask]) for name, mask in groups.items() if mask.any() # Aggregation has one method, so no pairs
+    }).T
