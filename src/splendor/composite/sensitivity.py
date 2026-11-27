@@ -10,6 +10,12 @@ from splendor.composite.aggregate import aggregate
 
 WEIGHT_COLUMNS = ["land_use_weight", "poi_weight", "attractiveness_weight"]
 COMBINATION_COLUMNS = ["measure", "normalization", "aggregation"] + WEIGHT_COLUMNS
+CHOICE_COLUMNS = {
+    "measure": ["measure"],
+    "normalization": ["normalization"],
+    "aggregation": ["aggregation"],
+    "weights": WEIGHT_COLUMNS,
+}
 
 
 def _normalize_components(
@@ -126,3 +132,33 @@ def get_main_scores(grid: pd.DataFrame, specification: dict[str, Any], id_column
     if not (main[id_column].is_unique and main[id_column].nunique() == grid[id_column].nunique()):
         raise ValueError("main specification must match exactly one combination in the grid")
     return main.reset_index(drop=True)
+
+
+def summarize_correlations(
+    correlations: pd.DataFrame,
+    weights: Sequence[tuple[float, float, float]],
+) -> pd.DataFrame:
+    """
+    Spearman correlations between the combinations whose weights are in 'weights', summarized (count, min,
+    median, max) over all pairs, and over the pairs that differ in exactly one choice, per choice.
+    """
+    combos = correlations.index.to_frame(index=False)
+    selected = {tuple(round(w, 6) for w in ws) for ws in weights}
+    keep = combos[WEIGHT_COLUMNS].round(6).apply(tuple, axis=1).isin(selected).to_numpy()
+    corr = correlations.to_numpy()[np.ix_(keep, keep)]
+    combos = combos[keep].reset_index(drop=True)
+
+    i, j = np.triu_indices(len(combos), k=1) # Each pair once
+    rho = corr[i, j]
+    differs = {
+        choice: (combos.loc[i, columns].to_numpy() != combos.loc[j, columns].to_numpy()).any(axis=1)
+        for choice, columns in CHOICE_COLUMNS.items()
+    }
+    n_differing = sum(d.astype(int) for d in differs.values())
+
+    groups = {"all pairs": np.ones(len(rho), dtype=bool)}
+    groups |= {f"only {choice}": d & (n_differing == 1) for choice, d in differs.items()}
+    return pd.DataFrame({
+        name: pd.Series(rho[mask]).describe()[["count", "min", "50%", "max"]]
+        for name, mask in groups.items() if mask.any() # Aggregation has one method, so no pairs
+    }).T.rename(columns={"50%": "median"})

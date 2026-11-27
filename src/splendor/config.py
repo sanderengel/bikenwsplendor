@@ -69,3 +69,5 @@ MAIN_SPECIFICATION = {
     "poi_weight": 0.25,
     "attractiveness_weight": 0.25,
 }
+
+TOP_SHARE = .05 # Share of units counted as the top in the sensitivity results
